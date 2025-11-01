@@ -1,0 +1,2813 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+ <!--
+    ===============================================================
+    Loopalingua – Multilingual Phrase Looper 
+    ---------------------------------------------------------------
+    PURPOSE
+    - Practice app for listening (phrase looping) + basic speaking
+      comparison. No servers: just Web APIs (Speech Synthesis +
+      webkitSpeechRecognition where available).
+    - Heavily commented so you can jump right to any section.
+    ---------------------------------------------------------------
+    FILE LAYOUT
+    - <head> .......... styles, fonts, theme variables
+    - <header> ........ top bar (brand + language + big buttons)
+    - <main> .......... tab bar + 4 pages (panels):
+        1) Phrase Loop
+        2) Speak & Compare
+        3) Phrase Packs
+        4) Stats
+    - <div id="splash"> welcome overlay
+    - <script> ........ app logic, grouped by [S#] sections
+    ===============================================================
+
+  <!-- Loopalingua – Multilingual Phrase Looper -->
+
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Loopalingua – Multilingual Phrase Looper - Practice Speaking and Listening to your own CUSTOMIZED words and phrases.</title>
+
+  <!-- manifest.json allows this to behave like an installable PWA -->
+  <link rel="manifest" href="manifest.json">
+
+  <!-- Fonts:
+       - Quicksand for general UI
+       - Noto Sans SC for Chinese characters (SC = Simplified Chinese)
+  -->
+  <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;600;700&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+
+  <!-- theme-color: mobile browser address bar color -->
+  <meta name="theme-color" content="#3C3B6E" />
+
+  <style>
+    /* ====== THEME VARIABLES / GLOBAL COLOR TOKENS ======
+       These CSS variables drive the dark theme background,
+       accents, and "USA flag-ish" gradient in the header.
+       The JS can update some of these (like --accent) per language.
+    */
+    :root { --bg:#0e1114; --card:#13181d; --ink:#f6f7f9; --muted:#a6b0bb; --line:#232b34;
+      --accent:#3C3B6E; --accent2:#B22234; --accent-soft: rgba(60,59,110,0.18); --accent2-soft: rgba(178,34,52,0.18); }
+
+    * { box-sizing: border-box; }
+
+    /* BODY:
+       - Dark gradient background
+       - Quicksand is main font
+    */
+
+
+/* === Option C: Smart background (A by default, B for higher contrast) === */
+
+/* Default: Option A (soft glow gradient, dark & moody) */
+body {
+  background: linear-gradient(180deg,
+              rgba(255,255,255,0.05) 0%,
+              rgba(178,34,52,0.10) 20%,
+              rgba(60,59,110,0.10) 60%,
+              rgba(0,0,0,0.85) 100%),
+              var(--bg);
+}
+
+/* If the OS/browser requests MORE CONTRAST, switch to Option B (brighter) */
+@media (prefers-contrast: more) {
+  body {
+    background: linear-gradient(180deg,
+                rgba(255,255,255,0.07) 0%,
+                rgba(178,34,52,0.12) 20%,
+                rgba(60,59,110,0.12) 60%,
+                rgba(20,25,30,1) 100%),
+                #1a1f24;
+  }
+  /* Slightly strengthen borders/text for high-contrast users */
+  .card { border-color: #33424d; }
+  input, select, textarea { border-color: #3b4b57; }
+}
+
+/* (Optional) If someone forces LIGHT mode system-wide, keep it usable */
+@media (prefers-color-scheme: light) {
+  body { color: #1f2937; }
+  .card { background: #ffffff; color: #1f2937; border-color: #e5e7eb; }
+  input, select, textarea { background:#fff; color:#111; border:1px solid #d1d5db; }
+}
+
+
+
+    /* HEADER:
+       - Sticky top bar
+       - Gradient based on --accent / --accent2 (language theme)
+    */
+    header { padding: 12px 14px; background: linear-gradient(90deg, var(--accent) 0%, var(--accent) 50%, var(--accent2) 100%);
+      color: #fff; display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; position: sticky; top: 0; z-index: 5; }
+
+    .brand { display:flex; align-items:center; gap:10px; }
+
+    /* Little "flag" block icon next to app title */
+    .flag { width: 34px; height: 22px; border-radius: 4px; overflow:hidden; box-shadow:0 2px 8px rgba(0,0,0,.3); }
+    .flag > div { height: 33.33%; } .flag .r { background:#B22234; } .flag .y { background:#fff; }
+
+    h1 { margin:0; font-size:1.12rem; letter-spacing:0.3px; }
+
+    .right { display:flex; align-items:center; gap:8px; }
+
+    /* Form-ish controls: */
+    select, button, input, textarea { padding: 10px 12px; border:1px solid var(--line); border-radius: 12px; }
+    select, option { background:#fff; color:#111; }
+
+    /* Buttons share basic structure but colors differ */
+    button { cursor:pointer; color: var(--ink); background: transparent; }
+    button.primary { background: var(--accent-soft); border-color: var(--accent); }
+    button.gold { background: var(--accent2-soft); border-color: var(--accent2); }
+
+    .chip { border:1px solid rgba(255,255,255,.6); color:#fff; padding:6px 10px; border-radius:999px; font-size:0.85rem; background: rgba(0,0,0,.15); }
+
+    main { padding: 16px; max-width: 980px; margin: 0 auto; }
+
+    /* TAB BAR (the 4-page nav buttons) */
+    .tabbar { display:flex; gap:8px; flex-wrap:wrap; margin: 12px 0 16px; }
+    .tabbar button { padding: 10px 14px; border-radius: 999px; border:1px solid var(--line); background: #fff0; color: var(--ink); }
+    .tabbar button.active { background: var(--accent-soft); border-color: var(--accent); }
+
+    /* PANEL:
+       exactly one .panel gets .active at a time
+       others are display:none so they feel like pages
+    */
+    .panel { display:none; } .panel.active { display:block; }
+
+    /* CARD:
+       reusable rounded modules used everywhere
+    */
+    .card { border:1px solid var(--line); border-radius: 16px; background: var(--card); padding: 14px; box-shadow: 0 2px 10px rgba(0,0,0,.08); margin: 12px 0; color: var(--ink); }
+
+    .small { font-size:.92rem; color: var(--muted); }
+    .status { font-size:.92rem; }
+    .kpi { font-size:1.25rem; font-weight:700; }
+
+    textarea { width:100%; min-height:120px; color: var(--ink); background: rgba(127,127,127,.05); }
+
+    /* Scrollable list/preview box UI */
+    .list { max-height: 300px; overflow:auto; border:1px dashed var(--line); padding:8px; border-radius:12px; background: rgba(127,127,127,.05); white-space:pre-wrap; }
+
+    /* grid2:
+       2-column layout on desktop, collapses to 1-column on narrow screens
+    */
+    .grid2 { display:grid; grid-template-columns:1fr 1fr; gap: 12px; } @media (max-width: 760px){ .grid2 { grid-template-columns: 1fr; } }
+
+    .row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+    .pill { padding:6px 10px; border-radius: 999px; border:1px solid var(--line); }
+    .tip { padding:10px; border-radius:12px; border:1px dashed var(--line); background: rgba(255,255,255,.03); }
+
+    /* .rtl is applied dynamically if we ever add languages that write RTL */
+    .rtl { direction: rtl; }
+
+    .footer { color: var(--muted); font-size:.9rem; padding: 12px 0 24px; text-align:center; }
+
+
+/* === Phrase Loop Button Row Enhancements === */
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 10px;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.control-btn {
+  font-size: 0.95rem;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+}
+
+/* Match your HTML: btn btn-primary / btn btn-secondary */
+.btn.btn-primary {
+  background-color: var(--accent-soft);
+  border: 1px solid var(--accent);
+  color: #fff;
+}
+.btn.btn-primary:hover {
+  filter: brightness(1.15);
+}
+
+.btn.btn-secondary {
+  background-color: var(--line);
+  border: 1px solid var(--accent2);
+  color: #fff;
+}
+.btn.btn-secondary:hover {
+  filter: brightness(1.15);
+}
+
+/* Force Start/Stop colors across all languages */
+#controlButtons #startLoop.btn {
+  background-color: #16a34a;   /* green */
+  border: 1px solid #15803d;
+  color: #fff;
+}
+#controlButtons #startLoop.btn:hover { filter: brightness(1.1); }
+
+#controlButtons #stopLoop.btn {
+  background-color: #dc2626;   /* red */
+  border: 1px solid #b91c1c;
+  color: #fff;
+}
+#controlButtons #stopLoop.btn:hover { filter: brightness(1.1); }
+
+
+/* === Step 4: Dark theme contrast enhancements === */
+
+/* Brighter body text */
+body, label, .small, .muted, .status {
+  color: #f5f7fa;
+}
+
+/* Inputs and dropdowns pop more */
+input, select, textarea {
+  background-color: #1a1f24;
+  border: 1px solid #374151;
+  color: #f9fafb;
+}
+input:focus, select:focus, textarea:focus {
+  outline: 2px solid #3b82f6;
+  outline-offset: 1px;
+}
+
+/* Buttons slightly brighter on hover */
+.btn.btn-primary:hover,
+.btn.btn-secondary:hover,
+#controlButtons #startLoop.btn:hover,
+#controlButtons #stopLoop.btn:hover {
+  filter: brightness(1.25);
+}
+
+/* Card edges slightly more defined */
+.card {
+  border: 1px solid #2d3741;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.25);
+}
+
+
+
+  </style>
+</head>
+<body>
+
+<!-- ========== HEADER BAR (APP TITLE + LANGUAGE DROPDOWN) ========== -->
+  <header>
+    <div class="brand">
+      <!-- Little decorative "flag" left of the app name -->
+      <div class="flag" aria-hidden="true"><div class="r"></div><div class="y"></div><div class="r"></div></div>
+
+      <!-- App title + subtitle -->
+      <h1>Loopalingua — Multilingual Phrase Looper <span class="small" style="color:#fff8;"> - Practice Speaking and Listening to your own CUSTOMIZED words and phrases.</span></h1>
+    </div>
+
+    <div class="right">
+      <!-- Language selector chip. JS fills the <select> with available LANGS.
+           NOTE: Right now this <select id="langSelect"> starts with a default.
+           FUTURE CHANGE: We'll make this blank on first launch, and then
+                         remember last choice using localStorage.
+                         (See PUT CODE HERE in [S1] later)
+      -->
+      <label class="chip" style="display:flex;align-items:center;gap:6px;">
+        🌐 Language
+        <select id="langSelect"></select>
+      </label>
+    </div>
+  </header>
+
+  <main>
+
+<!-- TAB BAR -->
+<div class="tabbar">
+  <!-- Keep Phrase Loop tab (it's the default active view on load) -->
+  <button class="tab active" data-tab="loop">🔁 Phrase Loop</button>
+
+  <!-- Keep Phrase Packs tab -->
+  <button class="tab" data-tab="packs">📚 Phrase Packs</button>
+
+  <!--
+    The following tabs are temporarily disabled for testing.
+    When you're ready to bring them back, just uncomment the
+    sections below AND also uncomment the <section> blocks
+    further down in the file.
+  -->
+  <!-- <button class="tab" data-tab="speak" id="tabSpeak">🗣️ Speak & Compare</button> -->
+  <!-- <button class="tab" data-tab="stats">📈 Stats</button> -->
+</div>
+
+
+
+
+<!-- ========== PAGE 1: PHRASE LOOP ========== -->
+<!-- This is the page where:
+     - user types sentences/phrases,
+     - chooses voice, speed, reps,
+     - hits Start Loop to auto-speak them in a loop,
+     - and can Save/Load/Delete sets locally.
+-->
+    <section class="panel active" id="loop">
+      <div class="card">
+        <h2>🔁 Phrase Loop</h2>
+     <div class="small">
+  Type <strong>words</strong>, <strong>phrases</strong>, or <strong>full sentences</strong> — one per line.  
+  To auto-play them in a loop, press <strong>Start Loop</strong>.  
+  Want ideas? Load ready-made phrases from <strong>Phrase Packs</strong>, then tweak them here.  
+  Use <strong>Save Set</strong> to store your current list, and <strong>Load Set</strong> to bring back any saved loop.
+</div>
+        
+
+<!-- [Loop] PHRASES TEXTAREA
+     - This is the "main working area".
+     - Whatever lines are here will be spoken in the loop.
+     - This also gets populated when we load a Pack or a Saved Set.
+-->
+	<textarea id="phrases" placeholder="Hello
+Hola
+你好"></textarea>
+<span id="imeTip"
+      style="display:none; display:block; margin-top:10px; padding:8px 10px; font-size:0.95rem; line-height:1.35; font-weight:600; border-radius:8px; background:rgba(217,43,43,0.08); border:1px solid rgba(217,43,43,0.25);">
+  Tip: For best pronunciation, switch to a Chinese (Pinyin) keyboard so your Pinyin becomes characters (e.g., 你好).
+</span>
+
+
+
+<!-- [Loop] Controls
+     - Voice dropdown is populated by JS (available SpeechSynthesis voices)
+     - Speed: speaking rate
+     - Repetitions: how many total times phrases cycle
+     - Pause (seconds): delay between items in loop
+-->
+        <div class="row" style="margin-top:10px;">
+          <label>Voice: <select id="voiceSelect"></select></label>
+          <button id="refreshVoices" class="pill">↻ Refresh voices</button>
+          <span id="voiceHint" class="small">Loading voices…</span>
+          <label>Speed: <input type="number" id="speed" step="0.1" min="0.5" max="2" value="1"></label>
+          <label>Repetitions: <input type="number" id="reps" min="1" max="50" value="10"></label>
+          <label>Pause (seconds): <input type="number" id="pauseSec" step="0.1" min="0" max="5" value="0.4"></label>
+        </div>
+
+<!-- [Loop] Actions
+     - Shuffle: randomize the order of lines
+     - Start Loop: begin speaking the lines on a loop
+     - Stop Loop: cancels playback
+-->
+<div id="controlButtons" class="button-row">
+  <button id="startLoop" class="btn btn-primary control-btn">▶ Start Loop</button>
+  <button id="stopLoop" class="btn btn-secondary control-btn">⏹ Stop Loop</button>
+
+<button id="clearLoop" class="btn btn-tertiary control-btn"
+        style="background-color:#007BFF; color:white;"
+        onclick="
+          try{ speechSynthesis.cancel(); }catch(e){}
+          (function(){
+            var box = document.getElementById('phrases');
+            if (box) box.value = '';
+            var tip = document.getElementById('imeTip');
+            if (tip) tip.style.display = 'none';
+          })();
+        ">
+  🔄 Clear Loop
+</button>
+
+
+
+
+  <!-- 
+    🔀 Shuffle feature temporarily disabled.
+    Keeping this button commented out for future use.
+    To restore later, simply remove the comment tags below.
+  <button id="shuffleNow" class="btn btn-tertiary control-btn small-btn">🔀 Shuffle</button>
+  -->
+</div>
+
+
+
+<!-- [Loop] Capability notice
+     - This box is controlled by updateCapabilityNotices()
+     - Shows whether Speak & Compare is available for the current language.
+-->
+        <div id="langCapability" class="small tip" style="margin-top:10px; display:none;"></div>
+      </div>
+
+<!-- [Loop] Preview BOX (currently not shown / commented out)
+     - You said you DO NOT want a separate preview box right now, so this
+       is safe to leave commented.
+     - We will keep it here because in the future you might want a
+       "live bilingual list" view.
+-->
+<!--
+      <div class="card">
+        <strong>Phrases & Translations</strong>
+        <div id="previewList" class="list"></div>
+      </div>
+-->
+
+<!-- [Loop] Saved Sets card
+     - This is where the user can:
+       * save the current textarea lines under a name
+       * load a named set back into textarea
+       * delete a saved set
+     - Saved locally in browser storage (localStorage)
+     - The dropdown <select id="savedSets"> is populated at runtime
+       by refreshSavedSets()
+
+     CURRENT BEHAVIOR:
+     - "Saved Sets" dropdown + preview below it still work the same.
+
+     NEXT UPGRADE (Step 3):
+     - We are adding a NEW box (`savedLoopsBox`) underneath.
+     - That new box will list:
+         (A) built-in phrase packs for the currently selected language
+             (Starter Packs)
+         (B) user's own saved sets
+             (My Saved Loops)
+     - Each item in that new box will get a "Load this loop" button.
+
+     So this whole card becomes your "Saved Loops browser."
+
+     This HTML already includes the new box, but it's still empty until
+     we add renderSavedLoops() in JS. It'll be filled by JS later.
+-->
+<div class="card">
+  <div>
+    <strong>Saved Loops</strong>
+    <span class="small muted">(local to this device)</span>
+<div class="small" style="margin-top:6px;">
+  Your <strong>Saved Loops</strong> are custom phrase sets stored only in this browser.  
+  Use <strong>Save Set</strong> to keep your current list for later,  
+  <strong>Load Set</strong> to reopen a saved one,  
+  and <strong>Delete Set</strong> to remove it.  
+  Saved Loops will stay here until you clear your browser data.
+</div>
+<div class="small muted" style="margin-top:4px;">
+  Tip: You can load built-in <strong>Phrase Packs</strong> above, customize them, and then save your version here.
+</div>
+
+  </div>
+
+  <!-- Row of controls for naming/saving/loading/deleting a custom loop -->
+  <div class="row" style="margin-top:6px;">
+    <input id="saveName" placeholder="Name this set (e.g., Directions)" />
+    <button id="saveSet">Save Set</button>
+    <button id="loadSet">Load Set</button>
+    <button id="deleteSet">Delete Set</button>
+
+    <!-- This dropdown is populated by refreshSavedSets() -->
+    <select id="savedSets"></select>
+  </div>
+
+  <!-- Shows the contents of the currently selected saved set
+       from the dropdown above (refreshes via previewSaved()) -->
+  <div class="list small" id="savedPreview"></div>
+
+  <!-- NEW: Unified Saved Loops list
+       - This will be auto-generated by renderSavedLoops() (JS)
+       - It will show BOTH:
+           • Starter Packs for the currently selected language
+             (from PACKS[lang])
+           • User-saved loops (from local storage)
+       - Each will have a "Load this loop" button that copies phrases
+         into the big Phrase Loop textarea and switches back to this tab.
+
+       On first launch with no language selected:
+       - renderSavedLoops() will fill this box with a friendly message
+         like "Select a language above to view starter packs and
+         your saved loops."
+  -->
+  <div id="savedLoopsBox"
+       class="list small"
+       style="margin-top:10px;"></div>
+</div>
+</section>
+
+
+<!--
+[Speak & Compare temporarily disabled — keeping markup for later restore]
+
+<section class="panel" id="speak">
+  <div class="card">
+    <h2>🗣️ Speak & Compare</h2>
+    <div class="grid2">
+      <div>
+        <label class="small"><strong>1.</strong> Target phrase (selected language):</label>
+        <input id="target" placeholder="Type or paste your phrase here" style="width:100%;" />
+        <div class="row" style="margin-top:8px; align-items:center;">
+          <label class="pill"><input type="checkbox" id="autoListen" checked> Auto-listen before speaking</label>
+          <button id="listenTarget" class="gold">🎧 Listen</button>
+          <button id="startRec" class="primary">🎙️ Start Speaking</button>
+          <button id="stopRec">⏹ Stop</button>
+          <button id="addTargetToLoop">➕ Add Target to Loop</button>
+          <button id="favTarget">⭐ Add to Favorites</button>
+        </div>
+        <div id="capNotice" class="small tip" style="display:none;margin-top:8px;">...</div>
+        <div id="iosNotice" class="small tip" style="display:none;margin-top:8px;">On iPhone (Safari), live speech scoring isn’t available yet.</div>
+        <div id="recStatus" class="small status" style="margin-top:6px; color: var(--muted);">Ready</div>
+      </div>
+      <div class="small" style="align-self:flex-end; color: var(--muted);">
+        <strong>How it works:</strong> We compare your spoken transcript to the target phrase — a helpful proxy for pronunciation.
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div><strong>Heard:</strong> <span id="heard"></span></div>
+    <div><strong>Match:</strong> <span id="score" class="kpi">—</span></div>
+    <div id="feedback" class="small"></div>
+  </div>
+</section>
+-->
+
+
+
+<!-- ========== PAGE 3: PHRASE PACKS ========== -->
+<section class="panel" id="packs">
+  <div class="card">
+    <h2>📚 Phrase Packs</h2>
+
+    <div class="small">
+      Each <strong>Phrase Pack</strong> is a themed collection of ready-made phrases in your selected language.
+      Click a pack to load its phrases into the <strong>Phrase Loop</strong>, then listen, repeat, or save them as your own loop.
+      You can mix packs, edit the phrases, and create your own saved sets on the main page.
+    </div>
+  </div>
+
+  <!--
+  [Favorites section temporarily disabled — Speak & Compare is hidden, so this
+  list (⭐ Favorites) is inactive. Keeping the markup below for later use.]
+
+  <div class="card">
+    <h3>⭐ Favorites</h3>
+    <div class="row" style="margin-bottom:6px;">
+      <button id="loadFavorites" class="gold">Load Favorites</button>
+      <button id="clearFavorites">Clear Favorites</button>
+    </div>
+    <div id="favList" class="list small"></div>
+  </div>
+  -->
+
+  <div class="card">
+    <div class="small muted" style="margin-bottom:4px;">
+      Built-in phrase packs available for <strong>this language</strong>:
+    </div>
+    <div id="packList" class="list"></div>
+  </div>
+</section>
+
+
+
+
+<!--
+========== PAGE 4: STATS ========== (temporarily commented out)
+This page shows basic practice stats saved locally:
+  - Sessions started
+  - Total phrases spoken in loops
+  - Avg pronunciation match (Speak & Compare)
+-->
+<!--
+<section class="panel" id="stats">
+  <div class="card">
+    <h2>📈 Practice Stats</h2>
+    <div>Sessions: <span id="stSessions">0</span></div>
+    <div>Phrases Spoken: <span id="stUtterances">0</span></div>
+    <div>Avg Pronunciation Match: <span id="stAvg">—</span></div>
+    <div class="small" style="margin-top:6px; color: var(--muted);">
+      Stats are stored only on this device.
+    </div>
+  </div>
+</section>
+-->
+
+
+    <div class="footer">
+      <div class="small">Created by <strong>Susanna and her friend, Al</strong> (ChatGPT / OpenAI Prototype)</div>
+    </div>
+  </main>
+
+
+<!-- ======================= SCRIPT START ======================= -->
+  <script>
+
+// [S0] Namespace + storage + splash
+// ------------------------------------------------------------
+// NS: prefix for all localStorage keys so we don't clash with
+//     other apps in the same browser.
+// $: tiny helper to getElementById quickly.
+// store.get / store.set: read/write JSON safely in localStorage.
+// EVERYTHING "local to this device" uses these.
+// ------------------------------------------------------------
+  const NS = 'loopalingua_v637_';
+  const $ = id => document.getElementById(id);
+  const store = {
+    get(k, fb){
+      try {
+        return JSON.parse(localStorage.getItem(NS+k)) ?? fb;
+      } catch {
+        return fb;
+      }
+    },
+    set(k, v){
+      localStorage.setItem(NS+k, JSON.stringify(v));
+    }
+  };
+
+
+// [S1] Languages + theme
+// ------------------------------------------------------------
+// LANGS: list of languages the app supports.
+//   - code: internal code like 'es', 'fr', etc.
+//   - name: label shown in dropdown
+//   - tier: 'full' means we try to do Speak & Compare (speech rec);
+//           'partial' means listen-only (Phrase Loop only).
+//   - font: font stack to apply to the whole body when that language
+//           is selected (to support CJK, etc.).
+//   - dir: 'ltr' now, could be 'rtl' later for Arabic/Hebrew.
+//   - recog: language code for webkitSpeechRecognition.
+//   - ttsPrefix: helps pick the right TTS voice.
+//   - theme: [accentColor1, accentColor2] for header gradient etc.
+//
+// langSelect is the <select> in the header. We fill it with LANGS.
+// cfgFor() looks up config for a selected language code.
+//
+// applyTheme() actually updates CSS variables and <meta theme-color>
+// so the UI visually switches to "that language's vibe".
+//
+// IMPORTANT NEW BEHAVIOR FOR FIRST-LAUNCH:
+// We are now adding a disabled placeholder option ("— Select a language —")
+// at the top of the dropdown. We will only move past that placeholder
+// AFTER the user actually picks a language OR if we already have one
+// saved from before.
+//
+// S11 will handle whether we leave this placeholder selected
+// (brand new user) or programmatically select a real language
+// (returning user).
+// ------------------------------------------------------------
+const LANGS = [
+  {code:'en', name:'English', tier:'full',  font:"Quicksand, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif", dir:'ltr', recog:'en-US', ttsPrefix:'en', theme:['#3C3B6E','#B22234']},
+  {code:'es', name:'Spanish', tier:'full',  font:"Quicksand, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif", dir:'ltr', recog:'es-ES', ttsPrefix:'es', theme:['#C60B1E','#FFC400']},
+  {code:'zh', name:'Chinese (Mandarin)', tier:'full', font:"'Noto Sans SC', Quicksand, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif", dir:'ltr', recog:'zh-CN', ttsPrefix:'zh-CN', theme:['#d92b2b','#ffd54d']},
+  {code:'fr', name:'French', tier:'full', font:"Quicksand, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif", dir:'ltr', recog:'fr-FR', ttsPrefix:'fr', theme:['#0055A4','#EF4135']},
+  {code:'de', name:'German', tier:'full', font:"Quicksand, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif", dir:'ltr', recog:'de-DE', ttsPrefix:'de', theme:['#000000','#FFCE00']},
+  {code:'it', name:'Italian', tier:'full', font:"Quicksand, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif", dir:'ltr', recog:'it-IT', ttsPrefix:'it', theme:['#009246','#CE2B37']},
+  {code:'pt', name:'Portuguese', tier:'full', font:"Quicksand, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif", dir:'ltr', recog:'pt-PT', ttsPrefix:'pt', theme:['#006600','#FFCC00']},
+  {code:'ja', name:'Japanese', tier:'full', font:"Quicksand, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif", dir:'ltr', recog:'ja-JP', ttsPrefix:'ja', theme:['#DC143C','#FFFFFF']},
+  {code:'ko', name:'Korean', tier:'full', font:"Quicksand, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif", dir:'ltr', recog:'ko-KR', ttsPrefix:'ko', theme:['#003478','#C60C30']},
+  {code:'ru', name:'Russian', tier:'partial', font:"Quicksand, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif", dir:'ltr', recog:null, ttsPrefix:'ru', theme:['#0033A0','#DA291C']}
+];
+
+const langSelect = $('langSelect');
+
+// ------------------------------------------------------------
+// Build the language <select> menu:
+// 1. Add a disabled placeholder option ("— Select a language —").
+//    This is what first-time users will see. It is not clickable.
+// 2. Add each real language from LANGS.
+// ------------------------------------------------------------
+
+// 1. Placeholder option for first-time users
+const placeholderOpt = document.createElement('option');
+placeholderOpt.value = "";
+placeholderOpt.textContent = "— Select a language —";
+placeholderOpt.disabled = true;
+// We will programmatically decide whether this stays selected in S11.
+// (If it's a brand new user with no saved language, we leave this active.
+//  If the user has a saved language, S11 will override langSelect.value
+//  with that saved code.)
+langSelect.appendChild(placeholderOpt);
+
+
+// 2. Real languages
+LANGS.forEach(l => {
+  const opt = document.createElement('option');
+  opt.value = l.code;
+
+  // OLD (kept here for reference, no longer used):
+  // opt.textContent = (l.tier==='full' ? '🗣️🎧 ' : '🎧 ') + l.name;
+  //
+  // NEW:
+  // Speak & Compare tab is currently disabled in the UI,
+  // so we don't show the mic/headphones icons.
+  // We just show the friendly language label from LANGS[i].name.
+  opt.textContent = l.name;
+
+  langSelect.appendChild(opt);
+});
+
+
+
+// Helper: return the full config object for a language code
+function cfgFor(code){
+  // NOTE: we no longer fall back to LANGS[0] here, because if code is
+  // null/undefined/invalid during first launch, we don't want to
+  // silently apply English's theme/colors/etc. We'll let S11
+  // call this only AFTER we know we have a good code.
+  return LANGS.find(x => x.code === code) || null;
+}
+
+// Apply theme colors, font, text direction, and browser theme-color
+// whenever language changes.
+function applyTheme(cfg){
+  // Safety: if cfg is null (first-launch no language picked),
+  // just don't try to theme-swap yet.
+  if (!cfg) return;
+
+  const [a1,a2] = cfg.theme || ['#3C3B6E','#B22234'];
+  document.documentElement.style.setProperty('--accent', a1);
+  document.documentElement.style.setProperty('--accent2', a2);
+  document.documentElement.style.setProperty('--accent-soft', `rgba(${hexToRgb(a1)},0.18)`);
+  document.documentElement.style.setProperty('--accent2-soft', `rgba(${hexToRgb(a2)},0.18)`);
+  document.body.style.fontFamily = cfg.font;
+  document.body.dir = cfg.dir;
+
+  // Update <meta name="theme-color"> so browser chrome matches accent
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute('content', a1);
+}
+
+// Utility: turn "#RRGGBB" into "R,G,B" string for rgba()
+function hexToRgb(h){
+  const s = h.replace('#','');
+  const r = parseInt(s.substring(0,2),16),
+        g = parseInt(s.substring(2,4),16),
+        b = parseInt(s.substring(4,6),16);
+  return `${r},${g},${b}`;
+}
+
+
+// ============================================================
+// [S2] Packs + preview
+// ============================================================
+//
+//
+// PACKS is your built-in phrase packs for each language.
+//
+// Shape:
+// PACKS[langCode] = {
+//    "Pack Display Name": [
+//        { n:"native phrase",
+//          r:"romanization / pronunciation help ('' if not needed)",
+//          e:"English meaning" },
+//        ...
+//    ],
+//    "Another Pack Name": [ ... ],
+//    ...
+// }
+//
+// EXAMPLE:
+// PACKS["es"]["Saludos y Presentaciones 🇪🇸"] might be an array of
+// beginner-friendly Spanish greetings phrases.
+//
+// IMPORTANT:
+// - renderPacks(lang) reads PACKS[lang] and builds the Phrase Packs UI.
+// - Saved Loops panel (in page 1) ALSO uses PACKS[...] later via
+//   renderSavedLoops().
+//
+
+const PACKS = {
+
+  // =====================================================================
+  // ENGLISH (en)
+  // =====================================================================
+  en: {
+
+    // Greetings, small talk, introductions.
+    "Greetings & Introductions 👋": [
+      { n:"Hi!", r:"", e:"Hi!" },
+      { n:"Hello, how are you?", r:"", e:"Hello, how are you?" },
+      { n:"Nice to meet you.", r:"", e:"Nice to meet you." },
+      { n:"My name is Sarah.", r:"", e:"My name is Sarah." },
+      { n:"What’s your name?", r:"", e:"What’s your name?" },
+      { n:"I’m from New York.", r:"", e:"I’m from New York." },
+      { n:"Do you speak Spanish?", r:"", e:"Do you speak Spanish?" }
+    ],
+
+    // Transportation, location, navigation questions.
+    "Getting Around 🚕": [
+      { n:"Where is the train station?", r:"", e:"Where is the train station?" },
+      { n:"I’m lost.", r:"", e:"I’m lost." },
+      { n:"Is it close?", r:"", e:"Is it close?" },
+      { n:"Is it far?", r:"", e:"Is it far?" },
+      { n:"Go right, go left, go straight.", r:"", e:"Go right, go left, go straight." },
+      { n:"Can you call a taxi?", r:"", e:"Can you call a taxi?" },
+      { n:"How much is it to the airport?", r:"", e:"How much is it to the airport?" }
+    ],
+
+    // At cafes / restaurants. Includes allergies + bill.
+    "Restaurant & Food 🍽️": [
+      { n:"A table for two, please.", r:"", e:"A table for two, please." },
+      { n:"Can I see the menu, please?", r:"", e:"Can I see the menu, please?" },
+      { n:"Water, please.", r:"", e:"Water, please." },
+      { n:"What do you recommend?", r:"", e:"What do you recommend?" },
+      { n:"I’m allergic to nuts.", r:"", e:"I’m allergic to nuts." },
+      { n:"That was delicious.", r:"", e:"That was delicious." },
+      { n:"The check, please.", r:"", e:"The check, please." }
+    ],
+
+    // Money, buying things, payment.
+    "Shopping & Money 🛍️": [
+      { n:"How much is this?", r:"", e:"How much is this?" },
+      { n:"Do you have this in a different size?", r:"", e:"Do you have this in a different size?" },
+      { n:"I’m just looking, thank you.", r:"", e:"I’m just looking, thank you." },
+      { n:"Can you lower the price?", r:"", e:"Can you lower the price?" },
+      { n:"Do you take cards?", r:"", e:"Do you take cards?" },
+      { n:"That’s too expensive.", r:"", e:"That’s too expensive." }
+    ],
+
+    // Please / thank you / sorry / I don't understand / repeat.
+    "Polite Essentials 🙏": [
+      { n:"Please.", r:"", e:"Please." },
+      { n:"Thank you.", r:"", e:"Thank you." },
+      { n:"You’re welcome.", r:"", e:"You’re welcome." },
+      { n:"Excuse me.", r:"", e:"Excuse me." },
+      { n:"I’m sorry.", r:"", e:"I’m sorry." },
+      { n:"I don’t understand.", r:"", e:"I don’t understand." },
+      { n:"Can you repeat that, please?", r:"", e:"Can you repeat that, please?" }
+    ],
+
+    // Safety / health / urgent help.
+    "Emergency 🚨": [
+      { n:"I need help.", r:"", e:"I need help." },
+      { n:"Call an ambulance.", r:"", e:"Call an ambulance." },
+      { n:"Call the police.", r:"", e:"Call the police." },
+      { n:"I don’t feel well.", r:"", e:"I don’t feel well." },
+      { n:"I lost my passport.", r:"", e:"I lost my passport." },
+      { n:"Where is the pharmacy?", r:"", e:"Where is the pharmacy?" }
+    ]
+  },
+
+
+  // =====================================================================
+  // SPANISH (es)
+  // =====================================================================
+  es: {
+
+        // Greetings, “my name is,” where you’re from, etc.
+    "Saludos y Presentaciones (Greetings & Introductions) 👋": [
+      { n:"Hola, ¿cómo estás?", r:"", e:"Hello, how are you?" },
+      { n:"Mucho gusto.", r:"", e:"Nice to meet you." },
+      { n:"Me llamo Ana.", r:"", e:"My name is Ana." },
+      { n:"¿Cómo te llamas?", r:"", e:"What’s your name?" },
+      { n:"Soy de León.", r:"", e:"I’m from León." },
+      { n:"¿Hablas inglés?", r:"", e:"Do you speak English?" },
+      { n:"Encantado de conocerte.", r:"", e:"Pleased to meet you. (speaker male)" },
+      { n:"Encantada de conocerte.", r:"", e:"Pleased to meet you. (speaker female)" }
+    ],
+
+    // Getting around town: trains, taxis, lost, distance.
+    "Cómo Llegar / Direcciones (Directions) 🚕": [
+      { n:"¿Dónde está el metro?", r:"", e:"Where is the subway?" },
+      { n:"Estoy perdido.", r:"", e:"I’m lost. (speaker male)" },
+      { n:"Estoy perdida.", r:"", e:"I’m lost. (speaker female)" },
+      { n:"¿Está cerca?", r:"", e:"Is it close?" },
+      { n:"¿Está lejos?", r:"", e:"Is it far?" },
+      { n:"A la derecha, a la izquierda, recto.", r:"", e:"To the right, to the left, straight ahead." },
+      { n:"Necesito un taxi.", r:"", e:"I need a taxi." },
+      { n:"¿Cuánto cuesta hasta el centro?", r:"", e:"How much to the city center?" }
+    ],
+
+    // Ordering, allergies, bill.
+    "En el Restaurante (Restaurant & Food) 🍽️": [
+      { n:"Una mesa para dos, por favor.", r:"", e:"A table for two, please." },
+      { n:"La carta, por favor.", r:"", e:"The menu, please." },
+      { n:"Agua sin gas, por favor.", r:"", e:"Still water, please." },
+      { n:"¿Qué recomienda?", r:"", e:"What do you recommend?" },
+      { n:"Soy alérgico a los frutos secos.", r:"", e:"I’m allergic to nuts. (speaker male)" },
+      { n:"Soy alérgica a los frutos secos.", r:"", e:"I’m allergic to nuts. (speaker female)" },
+      { n:"Estuvo delicioso.", r:"", e:"That was delicious." },
+      { n:"La cuenta, por favor.", r:"", e:"The check, please." }
+    ],
+
+    // Shopping: price, size, just looking, cards.
+    "Compras y Dinero (Shopping & Money) 🛍️": [
+      { n:"¿Cuánto cuesta?", r:"", e:"How much is it?" },
+      { n:"¿Tiene otra talla?", r:"", e:"Do you have another size?" },
+      { n:"Sólo estoy mirando, gracias.", r:"", e:"I’m just looking, thanks." },
+      { n:"¿Puede hacerme un descuento?", r:"", e:"Can you give me a discount?" },
+      { n:"¿Aceptan tarjeta?", r:"", e:"Do you take card?" },
+      { n:"Es muy caro.", r:"", e:"That’s very expensive." }
+    ],
+
+    // Please / thanks / sorry / don’t understand.
+    "Frases Educadas (Polite Essentials) 🙏": [
+      { n:"Por favor.", r:"", e:"Please." },
+      { n:"Gracias.", r:"", e:"Thank you." },
+      { n:"De nada.", r:"", e:"You’re welcome." },
+      { n:"Perdón.", r:"", e:"Excuse me / Sorry." },
+      { n:"Lo siento.", r:"", e:"I’m sorry." },
+      { n:"No entiendo.", r:"", e:"I don’t understand." },
+      { n:"¿Puede repetir, por favor?", r:"", e:"Can you repeat, please?" }
+    ],
+
+    // Urgent help, police, ambulance, passport, pharmacy.
+    "Emergencia (Emergency)🚨": [
+      { n:"Necesito ayuda.", r:"", e:"I need help." },
+      { n:"Llame a una ambulancia.", r:"", e:"Call an ambulance." },
+      { n:"Llame a la policía.", r:"", e:"Call the police." },
+      { n:"Me siento mal.", r:"", e:"I don’t feel well." },
+      { n:"He perdido mi pasaporte.", r:"", e:"I lost my passport." },
+      { n:"¿Dónde está la farmacia?", r:"", e:"Where is the pharmacy?" }
+    ]
+  },
+
+
+
+  // =====================================================================
+  // Chinese
+  // =====================================================================
+ 
+   zh: {
+
+    // Greetings, intro, where you're from
+    "日常问候和自我介绍 (Greetings & Introductions)  👋": [
+      { n:"你好。", r:"Nǐ hǎo.", e:"Hello." },
+      { n:"早上好。", r:"Zǎoshang hǎo.", e:"Good morning." },
+      { n:"晚上好。", r:"Wǎnshang hǎo.", e:"Good evening." },
+      { n:"很高兴认识你。", r:"Hěn gāoxìng rènshi nǐ.", e:"Nice to meet you." },
+      { n:"你好吗？", r:"Nǐ hǎo ma?", e:"How are you?" },
+      { n:"我叫李婷。", r:"Wǒ jiào Lǐ Tíng.", e:"My name is Li Ting." },
+      { n:"你叫什么名字？", r:"Nǐ jiào shénme míngzi?", e:"What’s your name?" },
+      { n:"我来自广东。", r:"Wǒ láizì Guǎngdōng.", e:"I’m from Guangdong." },
+      { n:"你会说英语吗？", r:"Nǐ huì shuō Yīngyǔ ma?", e:"Do you speak English?" }
+    ],
+
+    // Getting around, distance, taxi, station, airport
+    "问路和交通 (Getting Around) 🚕": [
+      { n:"请问，地铁站在哪里？", r:"Qǐngwèn, dìtiě zhàn zài nǎlǐ?", e:"Excuse me, where is the subway station?" },
+      { n:"我迷路了。", r:"Wǒ mílù le.", e:"I’m lost." },
+      { n:"这里是天安门吗？", r:"Zhèlǐ shì Tiān'ānmén ma?", e:"Is this Tian’anmen?" },
+      { n:"远吗？", r:"Yuǎn ma?", e:"Is it far?" },
+      { n:"近吗？", r:"Jìn ma?", e:"Is it close?" },
+      { n:"往右，往左，直走。", r:"Wǎng yòu, wǎng zuǒ, zhí zǒu.", e:"Turn right, turn left, go straight." },
+      { n:"可以帮我叫一辆出租车吗？", r:"Kěyǐ bāng wǒ jiào yí liàng chūzūchē ma?", e:"Can you call a taxi for me?" },
+      { n:"到机场多少钱？", r:"Dào jīchǎng duōshǎo qián?", e:"How much to the airport?" }
+    ],
+
+    // Ordering food, water, recommendation, allergy, bill
+    "在餐厅 (Restaurant & Food) 🍽️": [
+      { n:"请给我们一张两个人的桌子。", r:"Qǐng gěi wǒmen yì zhāng liǎng ge rén de zhuōzi.", e:"A table for two, please." },
+      { n:"请给我菜单。", r:"Qǐng gěi wǒ càidān.", e:"The menu, please." },
+      { n:"请给我一杯水。", r:"Qǐng gěi wǒ yì bēi shuǐ.", e:"Water, please." },
+      { n:"你推荐什么？", r:"Nǐ tuījiàn shénme?", e:"What do you recommend?" },
+      { n:"我对花生过敏。", r:"Wǒ duì huāshēng guòmǐn.", e:"I’m allergic to peanuts." },
+      { n:"很好吃。", r:"Hěn hǎo chī.", e:"This is delicious." },
+      { n:"请结账。", r:"Qǐng jiézhàng.", e:"The check, please." }
+    ],
+
+    // Shopping phrases, price, cheaper, card
+    "购物和付款 (Shopping & Money) 🛍️": [
+      { n:"这个多少钱？", r:"Zhège duōshǎo qián?", e:"How much is this?" },
+      { n:"有别的大小吗？", r:"Yǒu bié de dàxiǎo ma?", e:"Do you have another size?" },
+      { n:"我只是看看，谢谢。", r:"Wǒ zhǐshì kànkan, xièxie.", e:"I’m just looking, thanks." },
+      { n:"太贵了。", r:"Tài guì le.", e:"That’s too expensive." },
+      { n:"可以便宜一点吗？", r:"Kěyǐ piányi yìdiǎn ma?", e:"Can you make it cheaper?" },
+      { n:"可以刷卡吗？", r:"Kěyǐ shuākǎ ma?", e:"Can I pay by card?" }
+    ],
+
+    // Polite basics: please / thanks / sorry / repeat / don't understand
+    "礼貌用语 (Polite Essentials) 🙏": [
+      { n:"请。", r:"Qǐng.", e:"Please." },
+      { n:"谢谢。", r:"Xièxie.", e:"Thank you." },
+      { n:"不客气。", r:"Bú kèqi.", e:"You’re welcome." },
+      { n:"对不起。", r:"Duìbuqǐ.", e:"I’m sorry / excuse me." },
+      { n:"我听不懂。", r:"Wǒ tīng bù dǒng.", e:"I don’t understand." },
+      { n:"请再说一遍。", r:"Qǐng zài shuō yí biàn.", e:"Please say it again." }
+    ],
+
+    // Emergency and health help
+    "紧急情况 (Emergency) 🚨": [
+      { n:"请帮帮我。", r:"Qǐng bāngbāng wǒ.", e:"Please help me." },
+      { n:"请叫救护车。", r:"Qǐng jiào jiùhùchē.", e:"Call an ambulance." },
+      { n:"请叫警察。", r:"Qǐng jiào jǐngchá.", e:"Call the police." },
+      { n:"我不舒服。", r:"Wǒ bù shūfu.", e:"I don’t feel well." },
+      { n:"我的护照丢了。", r:"Wǒ de hùzhào diū le.", e:"I lost my passport." },
+      { n:"药店在哪里？", r:"Yàodiàn zài nǎlǐ?", e:"Where is the pharmacy?" }
+    ]
+  },
+
+
+  // =====================================================================
+  // French
+  // =====================================================================
+
+    fr: {
+
+    // Greetings, intros, name, where you're from.
+    "Salutations & Présentations (Greetings & Introductions) 👋": [
+      { n:"Bonjour !", r:"", e:"Hello / Good morning!" },
+      { n:"Bonsoir.", r:"", e:"Good evening." },
+      { n:"Comment ça va ?", r:"", e:"How are you?" },
+      { n:"Je m’appelle Claire.", r:"", e:"My name is Claire." },
+      { n:"Comment vous appelez-vous ?", r:"", e:"What is your name? (polite)" },
+      { n:"Je viens de Paris.", r:"", e:"I’m from Paris." },
+      { n:"Vous parlez anglais ?", r:"", e:"Do you speak English?" }
+    ],
+
+    // Getting directions, distance, taxis, “I’m lost.”
+    "Se Déplacer (Getting Around) 🚕": [
+      { n:"Où est la gare ?", r:"", e:"Where is the train station?" },
+      { n:"Je suis perdu.", r:"", e:"I’m lost. (speaker male)" },
+      { n:"Je suis perdue.", r:"", e:"I’m lost. (speaker female)" },
+      { n:"C’est loin ?", r:"", e:"Is it far?" },
+      { n:"C’est près ?", r:"", e:"Is it close?" },
+      { n:"À droite, à gauche, tout droit.", r:"", e:"Right, left, straight ahead." },
+      { n:"Pouvez-vous appeler un taxi ?", r:"", e:"Can you call a taxi?" },
+      { n:"Combien jusqu’à l’aéroport ?", r:"", e:"How much to the airport?" }
+    ],
+
+    // At a restaurant: table, water, bill, allergies.
+    "Au Restaurant (Restaurant & Food) 🍽️": [
+      { n:"Une table pour deux, s’il vous plaît.", r:"", e:"A table for two, please." },
+      { n:"La carte, s’il vous plaît.", r:"", e:"The menu, please." },
+      { n:"De l’eau, s’il vous plaît.", r:"", e:"Water, please." },
+      { n:"Qu’est-ce que vous recommandez ?", r:"", e:"What do you recommend?" },
+      { n:"Je suis allergique aux arachides.", r:"", e:"I’m allergic to peanuts." },
+      { n:"C’était délicieux.", r:"", e:"That was delicious." },
+      { n:"L’addition, s’il vous plaît.", r:"", e:"The check, please." }
+    ],
+
+    // Buying things, price, size, card payment.
+    "Magasins & Argent (Shopping & Money) 🛍️": [
+      { n:"Combien ça coûte ?", r:"", e:"How much does this cost?" },
+      { n:"Vous l’avez en une autre taille ?", r:"", e:"Do you have this in another size?" },
+      { n:"Je regarde seulement, merci.", r:"", e:"I’m just looking, thanks." },
+      { n:"C’est trop cher.", r:"", e:"That’s too expensive." },
+      { n:"Vous pouvez baisser le prix ?", r:"", e:"Can you lower the price?" },
+      { n:"Vous prenez la carte ?", r:"", e:"Do you take card?" }
+    ],
+
+    // Please / thanks / sorry / I don't understand / repeat.
+    "Formules de Politesse (Polite Essentials) 🙏": [
+      { n:"S’il vous plaît.", r:"", e:"Please." },
+      { n:"Merci.", r:"", e:"Thank you." },
+      { n:"De rien.", r:"", e:"You’re welcome." },
+      { n:"Excusez-moi.", r:"", e:"Excuse me." },
+      { n:"Je suis désolé.", r:"", e:"I’m sorry. (speaker male)" },
+      { n:"Je suis désolée.", r:"", e:"I’m sorry. (speaker female)" },
+      { n:"Je ne comprends pas.", r:"", e:"I don’t understand." },
+      { n:"Pouvez-vous répéter, s’il vous plaît ?", r:"", e:"Can you repeat, please?" }
+    ],
+
+    // Help, police, ambulance, not feeling well, lost passport.
+    "Urgence (Emergency) 🚨": [
+      { n:"J’ai besoin d’aide.", r:"", e:"I need help." },
+      { n:"Appelez une ambulance.", r:"", e:"Call an ambulance." },
+      { n:"Appelez la police.", r:"", e:"Call the police." },
+      { n:"Je ne me sens pas bien.", r:"", e:"I don’t feel well." },
+      { n:"J’ai perdu mon passeport.", r:"", e:"I lost my passport." },
+      { n:"Où est la pharmacie ?", r:"", e:"Where is the pharmacy?" }
+    ]
+  },
+
+// =====================================================================
+  // German
+  // =====================================================================
+
+    de: {
+
+    // Greetings, names, origin, “Do you speak…?”
+    "Begrüßung & Vorstellen (Greetings & Introductions) 👋": [
+      { n:"Hallo!", r:"", e:"Hello!" },
+      { n:"Guten Morgen.", r:"", e:"Good morning." },
+      { n:"Guten Abend.", r:"", e:"Good evening." },
+      { n:"Wie geht’s?", r:"", e:"How are you?" },
+      { n:"Ich heiße Lukas.", r:"", e:"My name is Lukas." },
+      { n:"Wie heißen Sie?", r:"", e:"What is your name? (formal)" },
+      { n:"Ich komme aus Berlin.", r:"", e:"I’m from Berlin." },
+      { n:"Sprechen Sie Englisch?", r:"", e:"Do you speak English?" }
+    ],
+
+    // Finding places, distance, taxis, airport cost.
+    "Unterwegs / Wegbeschreibungen (Getting Around) 🚕": [
+      { n:"Wo ist der Bahnhof?", r:"", e:"Where is the train station?" },
+      { n:"Ich habe mich verlaufen.", r:"", e:"I’m lost." },
+      { n:"Ist es in der Nähe?", r:"", e:"Is it nearby?" },
+      { n:"Ist es weit?", r:"", e:"Is it far?" },
+      { n:"Rechts, links, geradeaus.", r:"", e:"Right, left, straight ahead." },
+      { n:"Können Sie ein Taxi rufen?", r:"", e:"Can you call a taxi?" },
+      { n:"Wie viel kostet es zum Flughafen?", r:"", e:"How much is it to the airport?" }
+    ],
+
+    // Restaurants: table, water, allergies, bill.
+    "Im Restaurant (Restaurant & Food) 🍽️": [
+      { n:"Einen Tisch für zwei, bitte.", r:"", e:"A table for two, please." },
+      { n:"Die Speisekarte, bitte.", r:"", e:"The menu, please." },
+      { n:"Wasser, bitte.", r:"", e:"Water, please." },
+      { n:"Was empfehlen Sie?", r:"", e:"What do you recommend?" },
+      { n:"Ich bin allergisch gegen Nüsse.", r:"", e:"I’m allergic to nuts." },
+      { n:"Es war sehr lecker.", r:"", e:"That was very tasty." },
+      { n:"Die Rechnung, bitte.", r:"", e:"The check, please." }
+    ],
+
+    // Buying things, sizes, paying.
+    "Einkaufen & Geld (Shopping & Money) 🛍️": [
+      { n:"Wie viel kostet das?", r:"", e:"How much does that cost?" },
+      { n:"Haben Sie das in einer anderen Größe?", r:"", e:"Do you have this in another size?" },
+      { n:"Ich schaue nur, danke.", r:"", e:"I’m just looking, thanks." },
+      { n:"Können Sie den Preis reduzieren?", r:"", e:"Can you lower the price?" },
+      { n:"Nehmen Sie Karte?", r:"", e:"Do you take card?" },
+      { n:"Das ist zu teuer.", r:"", e:"That’s too expensive." }
+    ],
+
+    // Please / thanks / sorry / don’t understand / repeat.
+    "Höflichkeit & Alltag (Polite Essentials) 🙏": [
+      { n:"Bitte.", r:"", e:"Please." },
+      { n:"Danke.", r:"", e:"Thank you." },
+      { n:"Gern geschehen.", r:"", e:"You’re welcome." },
+      { n:"Entschuldigung.", r:"", e:"Excuse me / Sorry." },
+      { n:"Es tut mir leid.", r:"", e:"I’m sorry." },
+      { n:"Ich verstehe nicht.", r:"", e:"I don’t understand." },
+      { n:"Können Sie das bitte wiederholen?", r:"", e:"Can you repeat that, please?" }
+    ],
+
+    // Emergency words and phrases.
+    "Notfall (Emergency) 🚨": [
+      { n:"Ich brauche Hilfe.", r:"", e:"I need help." },
+      { n:"Rufen Sie einen Krankenwagen.", r:"", e:"Call an ambulance." },
+      { n:"Rufen Sie die Polizei.", r:"", e:"Call the police." },
+      { n:"Mir ist schlecht.", r:"", e:"I feel sick / I don’t feel well." },
+      { n:"Ich habe meinen Pass verloren.", r:"", e:"I lost my passport." },
+      { n:"Wo ist die Apotheke?", r:"", e:"Where is the pharmacy?" }
+    ]
+  },
+
+// =====================================================================
+  // ITALIAN
+  // =====================================================================
+
+   it: {
+
+    // Greetings, names, origin, “Do you speak…?”
+    "Saluti e Presentazioni (Greetings & Introductions) 👋": [
+      { n:"Ciao!", r:"", e:"Hi / Hello!" },
+      { n:"Buongiorno.", r:"", e:"Good morning." },
+      { n:"Buonasera.", r:"", e:"Good evening." },
+      { n:"Come stai?", r:"", e:"How are you?" },
+      { n:"Mi chiamo Laura.", r:"", e:"My name is Laura." },
+      { n:"Come ti chiami?", r:"", e:"What’s your name?" },
+      { n:"Sono di Roma.", r:"", e:"I’m from Rome." },
+      { n:"Parli inglese?", r:"", e:"Do you speak English?" }
+    ],
+
+    // Getting around, asking directions, taxis, etc.
+    "Come Arrivare (Getting Around) 🚕": [
+      { n:"Dov’è la stazione?", r:"", e:"Where is the train station?" },
+      { n:"Mi sono perso.", r:"", e:"I’m lost. (male)" },
+      { n:"Mi sono persa.", r:"", e:"I’m lost. (female)" },
+      { n:"È vicino?", r:"", e:"Is it close?" },
+      { n:"È lontano?", r:"", e:"Is it far?" },
+      { n:"A destra, a sinistra, dritto.", r:"", e:"Right, left, straight ahead." },
+      { n:"Puoi chiamare un taxi?", r:"", e:"Can you call a taxi?" },
+      { n:"Quanto costa fino all’aeroporto?", r:"", e:"How much to the airport?" }
+    ],
+
+    // Restaurant and food situations.
+    "Al Ristorante (Restaurant & Food) 🍽️": [
+      { n:"Un tavolo per due, per favore.", r:"", e:"A table for two, please." },
+      { n:"Il menù, per favore.", r:"", e:"The menu, please." },
+      { n:"Acqua, per favore.", r:"", e:"Water, please." },
+      { n:"Cosa consiglia?", r:"", e:"What do you recommend?" },
+      { n:"Sono allergico alle noci.", r:"", e:"I’m allergic to nuts. (male)" },
+      { n:"Sono allergica alle noci.", r:"", e:"I’m allergic to nuts. (female)" },
+      { n:"Era delizioso.", r:"", e:"That was delicious." },
+      { n:"Il conto, per favore.", r:"", e:"The check, please." }
+    ],
+
+    // Buying, prices, money, etc.
+    "Acquisti e Denaro (Shopping & Money) 🛍️": [
+      { n:"Quanto costa?", r:"", e:"How much is it?" },
+      { n:"Ce l’ha in un’altra misura?", r:"", e:"Do you have this in another size?" },
+      { n:"Sto solo guardando, grazie.", r:"", e:"I’m just looking, thanks." },
+      { n:"È troppo caro.", r:"", e:"That’s too expensive." },
+      { n:"Accettate carte?", r:"", e:"Do you take cards?" },
+      { n:"Può fare uno sconto?", r:"", e:"Can you give me a discount?" }
+    ],
+
+    // Polite and everyday phrases.
+    "Frasi di Cortesia (Polite Essentials) 🙏": [
+      { n:"Per favore.", r:"", e:"Please." },
+      { n:"Grazie.", r:"", e:"Thank you." },
+      { n:"Prego.", r:"", e:"You’re welcome." },
+      { n:"Mi scusi.", r:"", e:"Excuse me." },
+      { n:"Mi dispiace.", r:"", e:"I’m sorry." },
+      { n:"Non capisco.", r:"", e:"I don’t understand." },
+      { n:"Può ripetere, per favore?", r:"", e:"Can you repeat, please?" }
+    ],
+
+    // Emergencies and health.
+    "Emergenza (Emergency) 🚨": [
+      { n:"Ho bisogno di aiuto.", r:"", e:"I need help." },
+      { n:"Chiami un’ambulanza.", r:"", e:"Call an ambulance." },
+      { n:"Chiami la polizia.", r:"", e:"Call the police." },
+      { n:"Non mi sento bene.", r:"", e:"I don’t feel well." },
+      { n:"Ho perso il passaporto.", r:"", e:"I lost my passport." },
+      { n:"Dov’è la farmacia?", r:"", e:"Where is the pharmacy?" }
+    ]
+  },
+
+// =====================================================================
+  // Portuguese
+  // =====================================================================
+
+   pt: {
+
+    // Greetings and small talk.
+    "Saudações e Apresentações (Greetings & Introductions) 👋": [
+      { n:"Olá!", r:"", e:"Hello!" },
+      { n:"Bom dia.", r:"", e:"Good morning." },
+      { n:"Boa tarde.", r:"", e:"Good afternoon." },
+      { n:"Boa noite.", r:"", e:"Good evening / Good night." },
+      { n:"Como vai?", r:"", e:"How are you?" },
+      { n:"Meu nome é Sofia.", r:"", e:"My name is Sofia." },
+      { n:"De onde você é?", r:"", e:"Where are you from?" },
+      { n:"Sou de Lisboa.", r:"", e:"I’m from Lisbon." },
+      { n:"Você fala inglês?", r:"", e:"Do you speak English?" }
+    ],
+
+    // Directions, taxis, etc.
+    "Como Chegar (Getting Around) 🚕": [
+      { n:"Onde fica a estação de trem?", r:"", e:"Where is the train station?" },
+      { n:"Estou perdido.", r:"", e:"I’m lost. (male)" },
+      { n:"Estou perdida.", r:"", e:"I’m lost. (female)" },
+      { n:"É perto?", r:"", e:"Is it close?" },
+      { n:"É longe?", r:"", e:"Is it far?" },
+      { n:"Direita, esquerda, em frente.", r:"", e:"Right, left, straight ahead." },
+      { n:"Pode chamar um táxi?", r:"", e:"Can you call a taxi?" },
+      { n:"Quanto custa até o aeroporto?", r:"", e:"How much to the airport?" }
+    ],
+
+    // Restaurants and eating.
+    "No Restaurante (Restaurant & Food) 🍽️": [
+      { n:"Uma mesa para dois, por favor.", r:"", e:"A table for two, please." },
+      { n:"O cardápio, por favor.", r:"", e:"The menu, please." },
+      { n:"Água, por favor.", r:"", e:"Water, please." },
+      { n:"O que você recomenda?", r:"", e:"What do you recommend?" },
+      { n:"Sou alérgico a nozes.", r:"", e:"I’m allergic to nuts. (male)" },
+      { n:"Sou alérgica a nozes.", r:"", e:"I’m allergic to nuts. (female)" },
+      { n:"Estava delicioso.", r:"", e:"That was delicious." },
+      { n:"A conta, por favor.", r:"", e:"The check, please." }
+    ],
+
+    // Shopping & payment.
+    "Compras e Dinheiro (Shopping & Money)🛍️": [
+      { n:"Quanto custa?", r:"", e:"How much is it?" },
+      { n:"Tem outro tamanho?", r:"", e:"Do you have another size?" },
+      { n:"Só estou olhando, obrigado.", r:"", e:"I’m just looking, thank you. (male)" },
+      { n:"Só estou olhando, obrigada.", r:"", e:"I’m just looking, thank you. (female)" },
+      { n:"Aceitam cartão?", r:"", e:"Do you take cards?" },
+      { n:"É muito caro.", r:"", e:"That’s very expensive." }
+    ],
+
+    // Polite expressions and basics.
+    "Expressões de Cortesia (Polite Essentials) 🙏": [
+      { n:"Por favor.", r:"", e:"Please." },
+      { n:"Obrigado.", r:"", e:"Thank you. (male)" },
+      { n:"Obrigada.", r:"", e:"Thank you. (female)" },
+      { n:"De nada.", r:"", e:"You’re welcome." },
+      { n:"Com licença.", r:"", e:"Excuse me." },
+      { n:"Desculpe.", r:"", e:"I’m sorry." },
+      { n:"Não entendo.", r:"", e:"I don’t understand." },
+      { n:"Pode repetir, por favor?", r:"", e:"Can you repeat, please?" }
+    ],
+
+    // Emergency situations.
+    "Emergência (Emergency) 🚨": [
+      { n:"Preciso de ajuda.", r:"", e:"I need help." },
+      { n:"Chame uma ambulância.", r:"", e:"Call an ambulance." },
+      { n:"Chame a polícia.", r:"", e:"Call the police." },
+      { n:"Não estou me sentindo bem.", r:"", e:"I’m not feeling well." },
+      { n:"Perdi o meu passaporte.", r:"", e:"I lost my passport." },
+      { n:"Onde fica a farmácia?", r:"", e:"Where is the pharmacy?" }
+    ]
+  },
+
+// =====================================================================
+  // Japanese
+  // =====================================================================
+
+    ja: {
+
+    // Greetings, self-intro, where you're from.
+    "あいさつ・自己紹介 (Greetings & Introductions) 👋": [
+      { n:"こんにちは。", r:"Konnichiwa.", e:"Hello / Good afternoon." },
+      { n:"おはようございます。", r:"Ohayō gozaimasu.", e:"Good morning." },
+      { n:"こんばんは。", r:"Konbanwa.", e:"Good evening." },
+      { n:"はじめまして。", r:"Hajimemashite.", e:"Nice to meet you." },
+      { n:"お元気ですか？", r:"Ogenki desu ka?", e:"How are you?" },
+      { n:"わたしはゆりです。", r:"Watashi wa Yuri desu.", e:"I’m Yuri." },
+      { n:"どこから来ましたか？", r:"Doko kara kimashita ka?", e:"Where are you from?" },
+      { n:"東京から来ました。", r:"Tōkyō kara kimashita.", e:"I’m from Tokyo." },
+      { n:"英語を話せますか？", r:"Eigo o hanasemasu ka?", e:"Do you speak English?" }
+    ],
+
+    // Navigation, asking directions, distance.
+    "道をたずねる (Directions) 🚕": [
+      { n:"すみません、駅はどこですか？", r:"Sumimasen, eki wa doko desu ka?", e:"Excuse me, where is the train station?" },
+      { n:"道に迷いました。", r:"Michi ni mayoimashita.", e:"I’m lost." },
+      { n:"ここは渋谷ですか？", r:"Koko wa Shibuya desu ka?", e:"Is this Shibuya?" },
+      { n:"遠いですか？", r:"Tōi desu ka?", e:"Is it far?" },
+      { n:"近いですか？", r:"Chikai desu ka?", e:"Is it close?" },
+      { n:"右、左、まっすぐ。", r:"Migi, hidari, massugu.", e:"Right, left, straight ahead." },
+      { n:"タクシーを呼んでもらえますか？", r:"Takushī o yonde moraemasu ka?", e:"Can you call a taxi?" },
+      { n:"空港までいくらですか？", r:"Kūkō made ikura desu ka?", e:"How much to the airport?" }
+    ],
+
+    // Ordering, allergies, bill.
+    "レストランで (Restaurant & Food) 🍽️": [
+      { n:"二人です。", r:"Futari desu.", e:"We’re two. (table for two)" },
+      { n:"メニューをください。", r:"Menyū o kudasai.", e:"The menu, please." },
+      { n:"お水をください。", r:"Omizu o kudasai.", e:"Water, please." },
+      { n:"おすすめは何ですか？", r:"Osusume wa nan desu ka?", e:"What do you recommend?" },
+      { n:"ナッツにアレルギーがあります。", r:"Nattsu ni arerugī ga arimasu.", e:"I’m allergic to nuts." },
+      { n:"とてもおいしかったです。", r:"Totemo oishikatta desu.", e:"That was very good." },
+      { n:"お会計お願いします。", r:"O-kaikei onegai shimasu.", e:"The check, please." }
+    ],
+
+    // Shopping, price, card.
+    "買い物・お金 (Shopping & Money) 🛍️": [
+      { n:"これはいくらですか？", r:"Kore wa ikura desu ka?", e:"How much is this?" },
+      { n:"ほかのサイズはありますか？", r:"Hoka no saizu wa arimasu ka?", e:"Do you have another size?" },
+      { n:"見ているだけです。", r:"Mite iru dake desu.", e:"I’m just looking." },
+      { n:"ちょっと高いです。", r:"Chotto takai desu.", e:"That’s a little expensive." },
+      { n:"少し安くなりますか？", r:"Sukoshi yasuku narimasu ka?", e:"Can you make it cheaper?" },
+      { n:"カードは使えますか？", r:"Kādo wa tsukaemasu ka?", e:"Can I use a card?" }
+    ],
+
+    // Please / thanks / sorry / don't understand / repeat.
+    "ていねいな表現 (Polite Essentials) 🙏": [
+      { n:"お願いします。", r:"Onegaishimasu.", e:"Please." },
+      { n:"ありがとうございます。", r:"Arigatō gozaimasu.", e:"Thank you (polite)." },
+      { n:"すみません。", r:"Sumimasen.", e:"Excuse me / I’m sorry." },
+      { n:"ごめんなさい。", r:"Gomen nasai.", e:"I’m sorry. (casual-ish apology)" },
+      { n:"わかりません。", r:"Wakarimasen.", e:"I don’t understand." },
+      { n:"もう一度言ってください。", r:"Mō ichido itte kudasai.", e:"Please say it again." }
+    ],
+
+    // Help, police, hospital, not feeling well.
+    "緊急時 (Emergency) 🚨": [
+      { n:"助けてください。", r:"Tasukete kudasai.", e:"Please help me." },
+      { n:"救急車を呼んでください。", r:"Kyūkyūsha o yonde kudasai.", e:"Call an ambulance." },
+      { n:"警察を呼んでください。", r:"Keisatsu o yonde kudasai.", e:"Call the police." },
+      { n:"気分が悪いです。", r:"Kibun ga warui desu.", e:"I don’t feel well." },
+      { n:"パスポートをなくしました。", r:"Pasupōto o nakushimashita.", e:"I lost my passport." },
+      { n:"薬はどこで買えますか？", r:"Kusuri wa doko de kaemasu ka?", e:"Where can I buy medicine?" }
+    ]
+  },
+
+// =====================================================================
+  // Korean
+  // =====================================================================
+
+  ko: {
+
+    // Greetings, intro, where you're from.
+    "인사와 소개 (Greetings & Introductions) 👋": [
+      { n:"안녕하세요.", r:"Annyeonghaseyo.", e:"Hello." },
+      { n:"좋은 아침입니다.", r:"Joeun achimimnida.", e:"Good morning." },
+      { n:"좋은 저녁입니다.", r:"Joeun jeonyeogimnida.", e:"Good evening." },
+      { n:"처음 뵙겠습니다.", r:"Cheoeum boepgetseumnida.", e:"Nice to meet you." },
+      { n:"이름이 뭐예요?", r:"Ireumi mwoyeyo?", e:"What’s your name?" },
+      { n:"저는 민지예요.", r:"Jeoneun Minji-yeyo.", e:"I’m Minji." },
+      { n:"저는 서울에서 왔어요.", r:"Jeoneun Seoul-eseo wasseoyo.", e:"I’m from Seoul." },
+      { n:"영어 할 수 있어요?", r:"Yeongeo hal su isseoyo?", e:"Can you speak English?" }
+    ],
+
+    // Getting around, lost, distance.
+    "길 찾기 (Directions) 🚕": [
+      { n:"실례하지만, 역이 어디예요?", r:"Sillyehamnida, yeogi eodieyo?", e:"Excuse me, where is the station?" },
+      { n:"길을 잃어버렸어요.", r:"Gireul ireobeoryeosseoyo.", e:"I’m lost." },
+      { n:"여기가 홍대예요?", r:"Yeogiga Hongdae-yeyo?", e:"Is this Hongdae?" },
+      { n:"멀어요?", r:"Meoreoyo?", e:"Is it far?" },
+      { n:"가까워요?", r:"Gakkawoyo?", e:"Is it close?" },
+      { n:"오른쪽, 왼쪽, 쭉 가세요.", r:"Oreunjjok, oenjjok, jjuk gaseyo.", e:"Right, left, go straight." },
+      { n:"택시 불러 줄 수 있어요?", r:"Taeksi bulleo jul su isseoyo?", e:"Can you call a taxi?" },
+      { n:"공항까지 얼마예요?", r:"Gonghangkkaji eolmayeyo?", e:"How much to the airport?" }
+    ],
+
+    // Ordering food politely.
+    "식당에서 (Restaurant & Food) 🍽️": [
+      { n:"두 명이요.", r:"Du myeongiyo.", e:"Table for two." },
+      { n:"메뉴 좀 주세요.", r:"Menyu jom juseyo.", e:"The menu, please." },
+      { n:"물 좀 주세요.", r:"Mul jom juseyo.", e:"Water, please." },
+      { n:"추천해 주세요.", r:"Chucheon-hae juseyo.", e:"Please recommend something." },
+      { n:"저는 땅콩 알레르기가 있어요.", r:"Jeoneun ttangkong allergeuga isseoyo.", e:"I have a peanut allergy." },
+      { n:"정말 맛있었어요.", r:"Jeongmal masisseosseoyo.", e:"That was really good." },
+      { n:"계산서 주세요.", r:"Gyesanseo juseyo.", e:"The check, please." }
+    ],
+
+    // Shopping, money, card, too expensive.
+    "쇼핑 & 돈 (Shopping & Money) 🛍️": [
+      { n:"이거 얼마예요?", r:"Igeo eolmayeyo?", e:"How much is this?" },
+      { n:"다른 사이즈 있어요?", r:"Dareun saijeu isseoyo?", e:"Do you have another size?" },
+      { n:"그냥 보고 있어요.", r:"Geunyang bogo isseoyo.", e:"I’m just looking." },
+      { n:"조금 비싸요.", r:"Jogeum bissayo.", e:"It’s a little expensive." },
+      { n:"좀 깎아 줄 수 있어요?", r:"Jom kkakka jul su isseoyo?", e:"Can you give me a discount?" },
+      { n:"카드 돼요?", r:"Kadeu dwaeyo?", e:"Do you take card?" }
+    ],
+
+    // Please / sorry / I don't understand / repeat.
+    "기본 표현 (Polite Essentials) 🙏": [
+      { n:"제발.", r:"Jebal.", e:"Please." },
+      { n:"감사합니다.", r:"Gamsahamnida.", e:"Thank you." },
+      { n:"천만에요.", r:"Cheonmaneyo.", e:"You’re welcome." },
+      { n:"실례합니다.", r:"Sillyehamnida.", e:"Excuse me." },
+      { n:"죄송합니다.", r:"Joesonghamnida.", e:"I’m sorry." },
+      { n:"잘 못 알아들었어요.", r:"Jal mot aradeureosseoyo.", e:"I didn’t understand." },
+      { n:"다시 말씀해 주세요.", r:"Dasi malsseumhae juseyo.", e:"Please say it again." }
+    ],
+
+    // Emergency / health / help.
+    "긴급 상황 (Emergency) 🚨": [
+      { n:"도와 주세요.", r:"Dowa juseyo.", e:"Please help me." },
+      { n:"구급차 불러 주세요.", r:"Gugeupcha bulleo juseyo.", e:"Call an ambulance." },
+      { n:"경찰 불러 주세요.", r:"Gyeongchal bulleo juseyo.", e:"Call the police." },
+      { n:"몸이 안 좋아요.", r:"Momi an joayo.", e:"I don’t feel well." },
+      { n:"여권을 잃어버렸어요.", r:"Yeogwoneul ireobeoryeosseoyo.", e:"I lost my passport." },
+      { n:"약은 어디서 살 수 있어요?", r:"Yageun eodiseo sal su isseoyo?", e:"Where can I buy medicine?" }
+    ]
+  },
+
+
+
+// =====================================================================
+  // Russian
+  // =====================================================================
+
+  ru: {
+
+    // Greetings / name / where you're from / do you speak English
+    "Приветствия и знакомство (Greetings & Introductions) 👋": [
+      { n:"Здравствуйте.", r:"Zdravstvuyte.", e:"Hello. (formal)" },
+      { n:"Привет.", r:"Privet.", e:"Hi. (casual)" },
+      { n:"Доброе утро.", r:"Dobroye utro.", e:"Good morning." },
+      { n:"Добрый вечер.", r:"Dobryy vecher.", e:"Good evening." },
+      { n:"Как вы?", r:"Kak vy?", e:"How are you? (formal)" },
+      { n:"Меня зовут Анна.", r:"Menya zovut Anna.", e:"My name is Anna." },
+      { n:"Как вас зовут?", r:"Kak vas zovut?", e:"What’s your name? (formal)" },
+      { n:"Я из Москвы.", r:"Ya iz Moskvy.", e:"I’m from Moscow." },
+      { n:"Вы говорите по-английски?", r:"Vy govorite po-angliyski?", e:"Do you speak English?" }
+    ],
+
+    // Getting directions, distance, taxi, station
+    "Как добраться (Directions) 🚕": [
+      { n:"Извините, где вокзал?", r:"Izvinite, gde vokzal?", e:"Excuse me, where is the train station?" },
+      { n:"Я заблудился.", r:"Ya zabludilsya.", e:"I’m lost. (said by a man)" },
+      { n:"Я заблудилась.", r:"Ya zabludilasʹ.", e:"I’m lost. (said by a woman)" },
+      { n:"Это далеко?", r:"Eto daleko?", e:"Is it far?" },
+      { n:"Это близко?", r:"Eto blizko?", e:"Is it close?" },
+      { n:"Направо, налево, прямо.", r:"Napravo, nalevo, pryamo.", e:"Right, left, straight ahead." },
+      { n:"Вы можете вызвать такси?", r:"Vy mozhete vyzvat' taksi?", e:"Can you call a taxi?" },
+      { n:"Сколько стоит до аэропорта?", r:"Skol'ko stoit do aeroporta?", e:"How much to the airport?" }
+    ],
+
+    // Restaurant phrases
+    "В кафе и ресторане (Restaurant & Food) 🍽️": [
+      { n:"Столик на двоих, пожалуйста.", r:"Stolik na dvoikh, pozhaluysta.", e:"A table for two, please." },
+      { n:"Меню, пожалуйста.", r:"Menyu, pozhaluysta.", e:"The menu, please." },
+      { n:"Воды, пожалуйста.", r:"Vody, pozhaluysta.", e:"Water, please." },
+      { n:"Что вы порекомендуете?", r:"Chto vy porekomenduete?", e:"What do you recommend?" },
+      { n:"У меня аллергия на орехи.", r:"U menya allergiya na orehi.", e:"I’m allergic to nuts." },
+      { n:"Это было очень вкусно.", r:"Eto bylo ochen' vkusno.", e:"That was very tasty." },
+      { n:"Счёт, пожалуйста.", r:"Schyot, pozhaluysta.", e:"The check, please." }
+    ],
+
+    // Shopping, price, card, too expensive
+    "Покупки и деньги (Shopping & Money) 🛍️": [
+      { n:"Сколько это стоит?", r:"Skol'ko eto stoit?", e:"How much is this?" },
+      { n:"У вас есть другой размер?", r:"U vas yest' drugoy razmer?", e:"Do you have another size?" },
+      { n:"Я просто смотрю, спасибо.", r:"Ya prosto smotryu, spasibo.", e:"I’m just looking, thanks." },
+      { n:"Это слишком дорого.", r:"Eto slishkom dorogo.", e:"That’s too expensive." },
+      { n:"Можно дешевле?", r:"Mozhno deshevle?", e:"Can it be cheaper?" },
+      { n:"Вы принимаете карту?", r:"Vy prinimayete kartu?", e:"Do you take cards?" }
+    ],
+
+    // Polite / I don't understand / repeat that
+    "Вежливые фразы (Polite Essentials) 🙏": [
+      { n:"Пожалуйста.", r:"Pozhaluysta.", e:"Please / You’re welcome." },
+      { n:"Спасибо.", r:"Spasibo.", e:"Thank you." },
+      { n:"Извините.", r:"Izvinite.", e:"Excuse me / I’m sorry." },
+      { n:"Мне жаль.", r:"Mne zhal'.", e:"I’m sorry (I feel bad)." },
+      { n:"Я не понимаю.", r:"Ya ne ponimayu.", e:"I don’t understand." },
+      { n:"Повторите, пожалуйста.", r:"Povtorite, pozhaluysta.", e:"Please repeat." }
+    ],
+
+    // Emergencies, passport, not feeling well
+    "Чрезвычайные ситуации (Emergency) 🚨": [
+      { n:"Помогите, пожалуйста.", r:"Pomogite, pozhaluysta.", e:"Please help me." },
+      { n:"Вызовите скорую.", r:"Vyzovite skoruyu.", e:"Call an ambulance." },
+      { n:"Вызовите полицию.", r:"Vyzovite politsiyu.", e:"Call the police." },
+      { n:"Мне плохо.", r:"Mne plokho.", e:"I feel sick / I don’t feel well." },
+      { n:"Я потерял паспорт.", r:"Ya poteryal pasport.", e:"I lost my passport. (man speaking)" },
+      { n:"Я потеряла паспорт.", r:"Ya poteryala pasport.", e:"I lost my passport. (woman speaking)" },
+      { n:"Где ближайшая аптека?", r:"Gde blizhayshaya apteka?", e:"Where is the nearest pharmacy?" }
+    ]
+  }
+
+}; // <--- END const PACKS
+
+
+
+// ------------------------------------------------------------
+// packList is the <div id="packList"> in the Phrase Packs page.
+// We write pack cards into it dynamically.
+// ------------------------------------------------------------
+const packList = $('packList');
+
+
+// renderPacks(lang)
+// ------------------------------------------------------------
+// Called when language changes.
+// 1. Clears #packList
+// 2. Looks up PACKS[lang] (which is an object where each key is a pack)
+// 3. For each pack in that language:
+//    - Creates a mini card with:
+//        * "Load: [Pack Name]" button
+//        * preview (native / romanization / meaning)
+//    - Clicking Load puts the native phrases into #phrases textarea
+//      and switches back to the Phrase Loop tab.
+//
+// NOTE: This already supports MULTIPLE packs per language.
+// If PACKS["es"] has 6 packs,
+// you'll get 6 cards instantly in the UI.
+// ------------------------------------------------------------
+function renderPacks(lang){
+  // wipe previous list
+  packList.innerHTML = '';
+
+  // PACKS[lang] is either an object of packs or undefined
+  const dict = PACKS[lang] || {};
+
+  // Walk each pack name
+  for (const [name, items] of Object.entries(dict)) {
+
+    // create wrapper div for each pack
+    const wrap = document.createElement('div');
+    wrap.className = 'card';
+
+    // "Load" button that copies phrases into Phrase Loop textarea
+    const btn = document.createElement('button');
+    btn.textContent = `Load: ${name}`;
+    btn.className = 'primary';
+
+    btn.addEventListener('click', () => {
+      // take only the native phrase "n" from each item in this pack
+      const natives = items.map(p => p.n);
+      $('phrases').value = natives.join('\n');
+
+      // jump user back to Phrase Loop tab
+      const loopTabBtn = document.querySelector('[data-tab="loop"]');
+      if (loopTabBtn) loopTabBtn.click();
+    });
+
+    // Pack preview text block
+    const pre = document.createElement('div');
+    pre.className = 'small';
+    pre.style.whiteSpace = 'pre-wrap';
+
+    // each line shows native + (romanization) + — English
+    pre.textContent = items
+      .map(p =>
+        p.n
+        + (p.r ? ` (${p.r})` : '')
+        + (p.e ? ` — ${p.e}` : '')
+      )
+      .join('\n');
+
+    // build card
+    wrap.appendChild(btn);
+    wrap.appendChild(pre);
+
+    // drop card into #packList
+    packList.appendChild(wrap);
+  }
+}
+
+
+  // [S3] VOICE HANDLING FOR PHRASE LOOP
+  // ------------------------------------------------------------
+  // voices[]: holds available speech synthesis voices.
+  // populateVoices(langCode):
+  //   - fetches voices from speechSynthesis
+  //   - sorts them so "best match" (same language family) is first
+  //   - fills <select id="voiceSelect">
+  //
+  // loadVoicesWithRetry():
+  //   - tries multiple times because voices sometimes load async.
+  //
+  // speakOnce(text, speed):
+  //   - creates a SpeechSynthesisUtterance and speaks it with
+  //     the currently selected voice + speed.
+  // ------------------------------------------------------------
+  let voices = [];
+  const voiceSelect = $('voiceSelect');
+  const voiceHint = $('voiceHint');
+
+function populateVoices(langCode){
+  voices = speechSynthesis.getVoices();
+  voiceSelect.innerHTML = "";
+
+  const cfg = cfgFor(langCode);
+  const family = (cfg.ttsPrefix || 'en').toLowerCase();
+
+  const scored = voices.map(v => {
+    const lang = (v.lang || '').toLowerCase();
+    let score = 3;
+    if (lang.startsWith(family)) score = 1;
+    else if (lang.split('-')[0] === family.split('-')[0]) score = 2;
+    return { v, score };
+  }).sort((a, b) => a.score - b.score || a.v.name.localeCompare(b.v.name));
+
+  scored.forEach(({v}) => {
+    const opt = document.createElement('option');
+    opt.value = v.name;
+    opt.textContent = `${v.name} (${v.lang})`;
+    voiceSelect.appendChild(opt);
+  });
+
+  if (voiceSelect.options.length) {
+    // ✅ preselect the first voice that matches the target family, if any
+    const idx = Array.from(voiceSelect.options).findIndex(o =>
+      (o.textContent || '').toLowerCase().includes(family)
+    );
+    voiceSelect.selectedIndex = idx >= 0 ? idx : 0;
+    voiceHint.textContent = '';
+  } else {
+    voiceHint.textContent = 'No voices yet. Click “Refresh voices” or try reloading the page.';
+  }
+}
+
+
+  function loadVoicesWithRetry(langCode, attempt=0){
+    populateVoices(langCode);
+    if (voiceSelect.options.length || attempt >= 20) return;
+    setTimeout(()=>loadVoicesWithRetry(langCode, attempt+1), 150);
+  }
+
+  // Whenever the browser updates voices (Chrome fires this on first load)
+  if ('onvoiceschanged' in speechSynthesis)
+    speechSynthesis.onvoiceschanged = () => populateVoices(store.get('lang','en'));
+
+  // On page load, try to populate voices based on last saved language
+  window.addEventListener('load', () => loadVoicesWithRetry(store.get('lang','en')));
+
+  // Manual refresh button
+  $('refreshVoices').addEventListener('click', () => loadVoicesWithRetry(store.get('lang','en'), 0));
+
+  // Speak a single utterance once (used by Start Loop + Listen button)
+  function speakOnce(text, speed=1) {
+  const u = new SpeechSynthesisUtterance(text);
+
+  const chosen = Array.from(voiceSelect.options).find(o => o.selected);
+  const v = voices.find(v => v.name === (chosen?.value || '')) || voices[0];
+
+  if (v) {
+    u.voice = v;
+    u.lang  = v.lang;   // ✅ critical: lock the utterance to the selected voice’s locale
+  }
+
+  u.rate = speed;
+  speechSynthesis.cancel();
+  speechSynthesis.speak(u);
+  return u;
+}
+
+// [S3a] IME tip shows only for Chinese and when Pinyin (Latin letters) is typed
+const phraseBox = $('phrases');
+const tip = $('imeTip');
+const langSel = $('langSelect');
+
+function currentLang() {
+  // prefer your persisted value, fall back to the dropdown
+  return (store.get('lang','') || (langSel?.value || 'en'));
+}
+
+function updateImeTipVisibility() {
+  if (!phraseBox || !tip) return;
+  const isZh = currentLang() === 'zh';
+  const looksLatin = /[A-Za-z]/.test(phraseBox.value || '');
+  tip.style.display = (isZh && looksLatin) ? 'block' : 'none';
+}
+
+// React to typing, language changes, and first load
+if (phraseBox) phraseBox.addEventListener('input', updateImeTipVisibility);
+if (langSel)   langSel.addEventListener('change', updateImeTipVisibility);
+window.addEventListener('load', updateImeTipVisibility);
+
+
+
+  // [S4] LOOPING LOGIC FOR PHRASE LOOP
+  // ------------------------------------------------------------
+  // stopRequested: flag to stop loop
+  // loopState: tracks where we are in the loop
+  //
+  // normalizeLines(): splits textarea text into an array of trimmed lines
+  // shuffle(): Fisher-Yates shuffle
+  //
+  // NOTE ABOUT SOUND:
+  // We used to have a tiny "chime()" beep at loop start/stop.
+  // You've asked to remove those beeps.
+  // I've kept the chime() function below but fully commented it,
+  // and removed all calls to chime(...) in playLoop().
+  //
+  // playLoop():
+  //   - Speaks each phrase in order, cycles through list,
+  //     repeats until "remaining" hits 0 or Stop is pressed.
+  //
+  // Start Loop button:
+  //   - Reads UI controls (speed, reps, pauseSec)
+  //   - Calls playLoop(list,...)
+  //
+  // Stop Loop button:
+  //   - sets stopRequested=true and cancels speech
+  // ------------------------------------------------------------
+  let stopRequested = false;
+  let loopState = null;
+
+  function normalizeLines(raw) {
+    return raw.split('\n').map(s => s.trim()).filter(Boolean);
+  }
+
+  function shuffle(arr){
+    for (let i=arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j]];
+    }
+    return arr;
+  }
+
+/*
+  // Shuffle button for textarea content (disabled for now)
+  document.getElementById('shuffleNow').addEventListener('click', () => {
+    const lines = normalizeLines(document.getElementById('phrases').value);
+    if (!lines.length) return;
+    document.getElementById('phrases').value = shuffle(lines).join('\n');
+  });
+*/
+
+
+  /*
+  // Tiny audio beep helper (DISABLED BY REQUEST)
+  // We used to call chime(660) on loop start and chime(520) on stop.
+  // Keeping this here in case you want to re-enable later.
+  function chime(freq=880, dur=0.12){
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!window.__ctx) window.__ctx = new Ctx();
+      const audioCtx = window.__ctx;
+
+      const o=audioCtx.createOscillator(),
+            g=audioCtx.createGain();
+      o.type='sine';
+      o.frequency.value=freq;
+
+      g.gain.setValueAtTime(0.0001, audioCtx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.12, audioCtx.currentTime + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + dur);
+
+      o.connect(g).connect(audioCtx.destination);
+      o.start();
+      o.stop(audioCtx.currentTime + dur);
+    } catch {}
+  }
+  */
+
+  function playLoop(list, speed, pauseMs, totalReps) {
+    stopRequested = false;
+    loopState = {
+      list: list.slice(),                // copy of phrases
+      idx: 0,                            // current index in the list
+      remaining: list.length * totalReps, // how many speaks left total
+      speed,
+      pauseMs
+    };
+
+    // (We used to beep here: chime(660);)
+    startSession(); // increments session stats
+
+    const next = () => {
+      // If user stopped manually, or we're done, just exit silently.
+      if (stopRequested) { /* used to chime(520); */ return; }
+      if (loopState.remaining <= 0) { /* used to chime(520); */ return; }
+
+      const text = loopState.list[loopState.idx];
+      const utter = speakOnce(text, loopState.speed);
+
+      // After TTS finishes, schedule the next item
+      utter.onend = () => {
+        if (stopRequested) { /* used to chime(520); */ return; }
+
+        incUtterance(); // increment utterance stats
+        loopState.idx = (loopState.idx + 1) % loopState.list.length;
+        loopState.remaining--;
+
+        setTimeout(next, loopState.pauseMs);
+      };
+    };
+
+    next();
+  }
+
+  // Start Loop button behavior
+  document.getElementById('startLoop').addEventListener('click', () => {
+    const raw = document.getElementById('phrases').value.trim();
+    if (!raw) { alert('Add some phrases first.'); return; }
+
+    const list = normalizeLines(raw);
+    if (!list.length) { alert('No valid phrases found.'); return; }
+
+    const speed = parseFloat(document.getElementById('speed').value || '1');
+    const pauseSec = parseFloat(document.getElementById('pauseSec').value || '0.4');
+    const pauseMs = Math.max(0, Math.round(pauseSec * 1000));
+    const reps = Math.max(1, parseInt(document.getElementById('reps').value || '10', 10));
+
+    playLoop(list, speed, pauseMs, reps);
+  });
+
+  // Stop Loop button behavior
+  document.getElementById('stopLoop').addEventListener('click', () => {
+    stopRequested = true;
+    speechSynthesis.cancel();
+    // (We used to beep here via chime(520); now silent.)
+  });
+
+
+  // [S5] LOCAL SAVED SETS ("Saved Loops")
+  // ------------------------------------------------------------
+  // The Saved Loops card in PAGE 1 uses these helpers.
+  //
+  // Data shape in localStorage under key NS+"sets" is:
+  // {
+  //   "Directions": ["Turn left", "Go straight", ...],
+  //   "Greetings":  ["Hello", "Nice to meet you", ...],
+  //   ...
+  // }
+  //
+  // refreshSavedSets():
+  //   - repopulates the dropdown <select id="savedSets">
+  //   - calls previewSaved() which shows the selected set's contents
+  //
+  // saveSet click:
+  //   - saves whatever is in #phrases as a named set
+  //
+  // loadSet click:
+  //   - loads the selected named set back into #phrases
+  //
+  // deleteSet click:
+  //   - removes that set from storage
+  //
+  // *** FUTURE (PUT CODE HERE):
+  // We'll evolve this area so that instead of just listing the user's
+  // named sets, the UI also lists:
+  //   • built-in PACKS for currentLang (Starter Packs)
+  //   • user's own sets (My Saved Loops)
+  // That future code will live NEAR HERE because it's all about
+  // Saved Loops UI.
+  // ------------------------------------------------------------
+  function refreshSavedSets() {
+    const dict = store.get('sets', {});
+    const sel = document.getElementById('savedSets');
+    sel.innerHTML = "";
+
+    Object.keys(dict).sort().forEach(name => {
+      const opt = document.createElement('option');
+      opt.value = name;
+      opt.textContent = name;
+      sel.appendChild(opt);
+    });
+
+    previewSaved();
+  }
+
+  // Show what's inside the currently selected saved set
+  function previewSaved() {
+    const dict = store.get('sets', {});
+    const name = document.getElementById('savedSets').value;
+    const lines = dict[name] || [];
+    document.getElementById('savedPreview').textContent = lines.join('\n');
+  }
+
+  // Save Set button
+  document.getElementById('saveSet').addEventListener('click', () => {
+    const name = document.getElementById('saveName').value.trim();
+    if (!name) return alert('Give your set a name.');
+
+    const lines = normalizeLines(document.getElementById('phrases').value);
+    if (!lines.length) return alert('No phrases to save.');
+
+    const dict = store.get('sets', {});
+    dict[name] = lines;
+    store.set('sets', dict);
+
+    refreshSavedSets();
+    document.getElementById('saveName').value = '';
+  });
+
+  // Load Set button
+  document.getElementById('loadSet').addEventListener('click', () => {
+    const dict = store.get('sets', {});
+    const name = document.getElementById('savedSets').value;
+    if (!name) return;
+    const lines = dict[name] || [];
+    document.getElementById('phrases').value = lines.join('\n');
+    previewSaved();
+  });
+
+  // Delete Set button
+  document.getElementById('deleteSet').addEventListener('click', () => {
+    const dict = store.get('sets', {});
+    const name = document.getElementById('savedSets').value;
+    if (!name) return;
+    if (!confirm(`Delete saved set "${name}"?`)) return;
+    delete dict[name];
+    store.set('sets', dict);
+    refreshSavedSets();
+  });
+
+  // When dropdown changes, update the preview
+  document.getElementById('savedSets').addEventListener('change', previewSaved);
+
+// [S5.5] MERGED "SAVED LOOPS" VIEW
+// ------------------------------------------------------------
+// GOAL:
+//   Show a clickable list in <div id="savedLoopsBox"> that contains BOTH:
+//     (A) built-in starter packs for the currently selected language
+//         (from PACKS[langCode])
+//     (B) user's own saved sets from localStorage (store.get('sets', {}))
+//
+// Clicking "Load this loop":
+//   - copies that loop's phrases into the main #phrases textarea
+//   - switches user back to the Phrase Loop tab
+//
+// HOW IT WORKS:
+//
+// 1. Built-in packs ("Starter Pack")
+//    PACKS[langCode] looks like:
+//      {
+//        "Conversación Básica 🇪🇸": [
+//           {n:"Hola", r:"", e:"Hello"},
+//           ...
+//        ],
+//        "Conversation 🇫🇷": [...],
+//        ...
+//      }
+//
+//    For display, we only load p.n (the native phrase) into the loop.
+//
+// 2. User-saved loops ("My Saved Loop")
+//    store.get('sets', {}) looks like:
+//      {
+//        "Directions": ["Turn left","Go straight",...],
+//        "Greetings":  ["Hello","Nice to meet you",...],
+//      }
+//
+// IMPORTANT FIRST-LAUNCH BEHAVIOR:
+//   - If no language has been chosen yet (store.get('lang', null) is null),
+//     we'll show a friendly "Select a language..." message inside
+//     savedLoopsBox instead of packs.
+// ------------------------------------------------------------
+
+
+// Helper: build one visual card in savedLoopsBox
+function appendLoopCard(parentEl, {loopName, phrases, badgeText, sourceKind, langCode}) {
+  // parentEl: element we're appending into (#savedLoopsBox)
+  // loopName: string, display name for this loop
+  // phrases: array of strings (what will be loaded if clicked)
+  // badgeText: "Starter Pack" or "My Saved Loop"
+  // sourceKind: "builtin" | "user" (tells us where to load from)
+  // langCode: language code for builtin packs; user loops ignore it
+
+  const card = document.createElement('div');
+  card.style.cssText = `
+    border: 1px solid var(--line);
+    border-radius: 0.5rem;
+    background: rgba(255,255,255,0.02);
+    padding: 0.75rem;
+    margin-bottom: 0.5rem;
+    font-size: 0.9rem;
+    line-height: 1.4;
+    color: var(--ink);
+  `;
+
+  // Header row (loop name + badge)
+  const headerRow = document.createElement('div');
+  headerRow.style.cssText = `
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    flex-wrap:wrap;
+    gap:6px;
+  `;
+
+  const titleEl = document.createElement('div');
+  titleEl.style.fontWeight = '600';
+  titleEl.textContent = loopName;
+
+  const badgeEl = document.createElement('div');
+  badgeEl.style.cssText = `
+    font-size:0.7rem;
+    background:#eee;
+    border-radius:0.4rem;
+    padding:0.15rem 0.4rem;
+    color:#444;
+  `;
+  badgeEl.textContent = badgeText;
+
+  headerRow.appendChild(titleEl);
+  headerRow.appendChild(badgeEl);
+
+  // phrase count line
+  const countEl = document.createElement('div');
+  countEl.style.cssText = `
+    margin-top:0.5rem;
+    font-size:0.8rem;
+    color:var(--muted);
+  `;
+  countEl.textContent = `${phrases.length} phrase${phrases.length === 1 ? '' : 's'}`;
+
+  // Button to actually load this loop into Phrase Loop textarea
+  const btn = document.createElement('button');
+  btn.style.cssText = `
+    margin-top:0.6rem;
+    width:100%;
+    font-size:0.8rem;
+    padding:0.4rem 0.6rem;
+    border-radius:0.4rem;
+    border:1px solid var(--accent);
+    background:var(--accent-soft);
+    color:var(--ink);
+    cursor:pointer;
+  `;
+  btn.textContent = 'Load this loop';
+
+  btn.addEventListener('click', () => {
+    loadLoopIntoPlayer(sourceKind, loopName, langCode);
+  });
+
+  // Build full card
+  card.appendChild(headerRow);
+  card.appendChild(countEl);
+  card.appendChild(btn);
+
+  parentEl.appendChild(card);
+}
+
+
+// Load a loop (starter pack OR user-saved set) into #phrases and go to Phrase Loop tab
+function loadLoopIntoPlayer(sourceKind, loopName, langCode) {
+  let phrasesArr = [];
+
+  if (sourceKind === 'builtin') {
+    // Built-in pack: PACKS[langCode][loopName] is array of {n:"...", r:"...", e:"..."}
+    const packObj = PACKS[langCode] || {};
+    const packItems = packObj[loopName] || [];
+    phrasesArr = packItems.map(p => p.n); // just native lines
+  } else {
+    // User set: store.get('sets', {}) is { name: ["line1","line2", ...], ... }
+    const dict = store.get('sets', {});
+    phrasesArr = dict[loopName] || [];
+  }
+
+  $('phrases').value = phrasesArr.join('\n');
+
+  // Switch tab back to main Phrase Loop page
+  const loopTabBtn = document.querySelector('[data-tab="loop"]');
+  if (loopTabBtn) loopTabBtn.click();
+}
+
+
+// Build out the merged Saved Loops list inside #savedLoopsBox
+// Call this whenever language changes AND on startup.
+function renderSavedLoops() {
+  const box = $('savedLoopsBox');
+  if (!box) return; // safety: if HTML hasn't been updated yet
+
+  box.innerHTML = '';
+
+  // What's the currently selected/saved language?
+  // On first launch this may still be null.
+  const langCode = store.get('lang', null);
+
+  // First-launch / no-language-yet message:
+  if (!langCode) {
+    box.innerHTML = `
+      <div style="
+        color:var(--muted);
+        font-size:0.9rem;
+        line-height:1.4;
+      ">
+        Select a language above to view starter packs and your saved loops.
+      </div>
+    `;
+    return;
+  }
+
+  // Built-in packs for this language
+  const builtInForLang = PACKS[langCode] || {};
+  for (const [packName, packItems] of Object.entries(builtInForLang)) {
+    const phrases = packItems.map(p => p.n); // just native text
+    appendLoopCard(box, {
+      loopName: packName,
+      phrases,
+      badgeText: 'Starter Pack',
+      sourceKind: 'builtin',
+      langCode
+    });
+  }
+
+  // User-saved loops (all sets saved in store under NS+"sets")
+  // Currently we don't tag them by language, so we show them all.
+  const userDict = store.get('sets', {});
+  for (const [userSetName, userLines] of Object.entries(userDict)) {
+    appendLoopCard(box, {
+      loopName: userSetName,
+      phrases: userLines,
+      badgeText: 'My Saved Loop',
+      sourceKind: 'user',
+      langCode
+    });
+  }
+
+  // If literally nothing to show (unlikely because packs exist),
+  // give a friendly fallback.
+  if (!Object.keys(builtInForLang).length && !Object.keys(userDict).length) {
+    box.innerHTML = `
+      <div style="
+        color:var(--muted);
+        font-size:0.9rem;
+        line-height:1.4;
+      ">
+        Nothing to show yet. Try saving a loop or selecting a different language.
+      </div>
+    `;
+  }
+}
+
+
+    // [S6] FAVORITES (used in Phrase Packs tab, currently hidden)
+  // ------------------------------------------------------------
+  // IMPORTANT:
+  // The Favorites UI (⭐ Favorites card on the Phrase Packs page)
+  // is currently commented out in the HTML.
+  //
+  // That means elements like:
+  //   - #favList
+  //   - #loadFavorites
+  //   - #clearFavorites
+  //   - #favTarget (button from Speak & Compare)
+  //   - #target    (input from Speak & Compare)
+  //
+  // may NOT exist in the DOM.
+  //
+  // If we blindly call getElementById(...) and addEventListener(...)
+  // with those missing, we crash JS, and then tabs stop working.
+  //
+  // Below, everything is guarded so it's safe whether Favorites UI
+  // is visible or not. This keeps the rest of the app working. 💪
+  // ------------------------------------------------------------
+
+  // Read favorites array from localStorage
+  function getFavorites(){
+    return store.get('favorites', []);
+  }
+
+  // Save favorites array to localStorage, de-duped
+  function setFavorites(arr){
+    store.set('favorites', Array.from(new Set(arr)));
+    refreshFavoritesUI();
+  }
+
+  // Update the UI list in #favList, if it exists
+  function refreshFavoritesUI(){
+    const favListEl = document.getElementById('favList');
+    if (!favListEl) {
+      // Favorites panel is currently not in the DOM, so nothing to draw.
+      return;
+    }
+
+    const favs = getFavorites();
+    favListEl.textContent = favs.length
+      ? favs.join('\n')
+      : '(No favorites yet)';
+  }
+
+  // --- "Add to Favorites" button (⭐) in Speak & Compare ---
+  // That panel is currently commented out.
+  // We'll guard it so we don't crash if it's not there.
+  const favBtn = document.getElementById('favTarget');
+  if (favBtn) {
+    favBtn.addEventListener('click', () => {
+      const tEl = document.getElementById('target');
+      const t = (tEl && tEl.value || '').trim();
+      if (!t) { alert('Type a phrase first.'); return; }
+
+      setFavorites([ ...getFavorites(), t ]);
+
+      // tiny attempt at audio context warmup on mobile
+      try{
+        const a=new (window.AudioContext||window.webkitAudioContext)();
+      }catch{}
+    });
+  }
+
+  // --- Load Favorites button (Phrase Packs page) ---
+  const loadFavBtn = document.getElementById('loadFavorites');
+  if (loadFavBtn) {
+    loadFavBtn.addEventListener('click', () => {
+      const favs = getFavorites();
+      if (!favs.length) { alert('No favorites yet.'); return; }
+
+      // Drop favorites into Phrase Loop textarea
+      document.getElementById('phrases').value = favs.join('\n');
+
+      // Jump back to the Phrase Loop tab
+      const loopTabBtn = document.querySelector('[data-tab="loop"]');
+      if (loopTabBtn) loopTabBtn.click();
+    });
+  }
+
+  // --- Clear Favorites button (Phrase Packs page) ---
+  const clearFavBtn = document.getElementById('clearFavorites');
+  if (clearFavBtn) {
+    clearFavBtn.addEventListener('click', () => {
+      if (!confirm('Clear all favorites?')) return;
+      setFavorites([]);
+    });
+  }
+
+
+
+
+// [S7] PRONUNCIATION MATCHING (Levenshtein)
+// ------------------------------------------------------------
+// levenshtein(a,b): standard edit-distance algorithm.
+// similarity(a,b): turns distance into 0-100% "match score".
+//
+// listenTarget: plays TTS for whatever is in #target.
+//
+// Speech recognition setup:
+// - Uses webkitSpeechRecognition if available (mostly Chrome desktop).
+// - createRecognizer(lang) returns a configured recognizer:
+//     * interimResults so we get running text
+//     * continuous so it doesn't stop immediately
+// - startRec button:
+//     * picks correct language code (cfg.recog from LANGS)
+//     * begins recognition
+// - stopRec button:
+//     * stops recognition
+//
+// On recognition result:
+//   - show transcript in #heard
+//   - compute similarity vs #target
+//   - show % in #score and friendly feedback
+//
+// IMPORTANT CHANGE FOR TEST MODE:
+//   The Speak & Compare <section> is currently commented out in the HTML,
+//   so elements like #listenTarget, #startRec, #stopRec, #recStatus, etc.
+//   may NOT exist in the DOM.
+//   We now guard all event listeners with if (...) checks so we don't
+//   crash the script when those elements are missing.
+// ------------------------------------------------------------
+function levenshtein(a,b) {
+  a = a.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  b = b.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const m = [], al = a.length, bl = b.length;
+  for (let i=0;i<=al;i++){ m[i]=[i]; }
+  for (let j=0;j<=bl;j++){ m[0][j]=j; }
+  for (let i=1;i<=al;i++){
+    for (let j=1;j<=bl;j++){
+      const cost = a[i-1]===b[j-1]?0:1;
+      m[i][j] = Math.min(
+        m[i-1][j]+1,
+        m[i][j-1]+1,
+        m[i-1][j-1]+cost
+      );
+    }
+  }
+  return m[al][bl];
+}
+
+function similarity(a,b){
+  if (!a || !b) return 0;
+  const dist = levenshtein(a,b);
+  const maxLen = Math.max(a.length,b.length);
+  return Math.max(0, 100 * (1 - dist / maxLen));
+}
+
+// "Listen" button (Speak & Compare TTS preview) — SAFE VERSION
+const listenTargetBtn = document.getElementById('listenTarget');
+if (listenTargetBtn) {
+  listenTargetBtn.addEventListener('click', () => {
+    const targetInput = document.getElementById('target');
+    if (!targetInput) return;
+
+    const speed = parseFloat(document.getElementById('speed').value || '1');
+    const u = new SpeechSynthesisUtterance(targetInput.value || '');
+    const chosen = Array.from(voiceSelect.options).find(o => o.selected);
+    const v = voices.find(v => v.name === (chosen?.value || '')) || voices[0];
+    if (v) u.voice = v;
+    u.rate = speed;
+    speechSynthesis.cancel();
+    speechSynthesis.speak(u);
+  });
+}
+
+/*
+ // ORIGINAL VERSION (before we commented out Speak & Compare in HTML):
+ document.getElementById('listenTarget').addEventListener('click', () => {
+   const speed = parseFloat(document.getElementById('speed').value || '1');
+   const u = new SpeechSynthesisUtterance(document.getElementById('target').value || '');
+   const chosen = Array.from(voiceSelect.options).find(o => o.selected);
+   const v = voices.find(v => v.name === (chosen?.value || '')) || voices[0];
+   if (v) u.voice = v;
+   u.rate = speed;
+   speechSynthesis.cancel();
+   speechSynthesis.speak(u);
+ });
+*/
+
+let listening = false;
+let recog = null;
+
+// setRecStatus now checks if #recStatus exists before touching it,
+// so we don't throw an error when Speak & Compare is hidden.
+function setRecStatus(text, color) {
+  const el = document.getElementById('recStatus');
+  if (!el) return; // Speak & Compare panel may be commented out
+  el.textContent = text;
+  el.style.color = color || 'var(--muted)';
+}
+
+function createRecognizer(lang){
+  if (!('webkitSpeechRecognition' in window)) return null;
+  const r = new webkitSpeechRecognition();
+  r.lang = lang || 'en-US';
+  r.interimResults = true;
+  r.continuous = true;
+
+  r.onstart = () => setRecStatus('Listening… speak now', '#23b26d');
+  r.onend = () => { listening=false; setRecStatus('Stopped'); };
+
+  r.onresult = (e) => {
+    if (!listening) return;
+    let txt = '';
+    for (let i=e.resultIndex; i<e.results.length; ++i)
+      txt += e.results[i][0].transcript;
+
+    const heardEl = document.getElementById('heard');
+    if (heardEl) {
+      heardEl.textContent = txt.trim();
+    }
+
+    const tgtInput = document.getElementById('target');
+    const tgt = tgtInput ? tgtInput.value.trim() : '';
+    const scoreVal = similarity(txt.trim(), tgt);
+
+    const scoreEl = document.getElementById('score');
+    if (scoreEl) {
+      scoreEl.textContent = (tgt && txt)
+        ? `${scoreVal.toFixed(0)}%`
+        : '—';
+    }
+
+    const feedbackEl = document.getElementById('feedback');
+    if (feedbackEl) {
+      feedbackEl.textContent =
+        (!tgt||!txt) ? '' :
+        (scoreVal>=90 ? 'Fantastic! 🎉' :
+         scoreVal>=70 ? 'Almost there — try once more.' :
+                        'Keep practicing — one more time!');
+    }
+  };
+
+  r.onerror = (e) => {
+    setRecStatus('Recognition error: ' + (e.error||'unknown'), '#ff4d4f');
+    listening=false;
+  };
+
+  return r;
+}
+
+// Start Recording — SAFE VERSION
+const startRecBtn = document.getElementById('startRec');
+if (startRecBtn) {
+  startRecBtn.addEventListener('click', () => {
+    const cfg = cfgFor(store.get('lang','en'));
+    if (!cfg || !cfg.recog) {
+      alert('Recognition not supported for this language.');
+      return;
+    }
+    if (!('webkitSpeechRecognition' in window)) {
+      alert('Speech recognition not available in this browser.');
+      return;
+    }
+
+    recog = recog || createRecognizer(cfg.recog);
+    if (!recog) return;
+
+    listening = true;
+    setRecStatus('Listening… speak now', '#23b26d');
+    try { recog.start(); } catch {}
+  });
+}
+
+/*
+ // ORIGINAL VERSION (before we commented out Speak & Compare in HTML):
+ document.getElementById('startRec').addEventListener('click', () => {
+   const cfg = cfgFor(store.get('lang','en'));
+   if (!cfg.recog) return alert('Recognition not supported for this language.');
+   if (!('webkitSpeechRecognition' in window))
+     return alert('Speech recognition not available in this browser.');
+
+   recog = recog || createRecognizer(cfg.recog);
+   if (!recog) return;
+
+   listening = true;
+   setRecStatus('Listening… speak now', '#23b26d');
+   try { recog.start(); } catch {}
+ });
+*/
+
+// Stop Recording — SAFE VERSION
+const stopRecBtn = document.getElementById('stopRec');
+if (stopRecBtn) {
+  stopRecBtn.addEventListener('click', () => {
+    try { recog && recog.stop(); } catch {}
+    listening=false;
+    setRecStatus('Stopped');
+  });
+}
+
+/*
+ // ORIGINAL VERSION (before we commented out Speak & Compare in HTML):
+ document.getElementById('stopRec').addEventListener('click', () => {
+   try { recog && recog.stop(); } catch {}
+   listening=false;
+   setRecStatus('Stopped');
+ });
+*/
+
+
+
+  // [S8] CAPABILITY + TAB VISIBILITY
+  // ------------------------------------------------------------
+  // updateCapabilityNotices(cfg):
+  //   - Updates UI hints telling user whether Speak & Compare works
+  //     for the chosen language in this browser.
+  //
+  // updateSpeakTabVisibility(cfg):
+  //   - Hides the "Speak & Compare" tab entirely if the language tier
+  //     is 'partial' (ex: Russian).
+  //   - If Speak tab was active and language changes to partial,
+  //     we auto-switch back to Phrase Loop.
+  // ------------------------------------------------------------
+  function updateCapabilityNotices(cfg){
+    const cap = document.getElementById('capNotice');
+    const hasWebSpeechRecognition = ('webkitSpeechRecognition' in window);
+    const speakAvailable = (cfg.tier === 'full') && hasWebSpeechRecognition && !!cfg.recog;
+
+    if (!speakAvailable) {
+      cap.style.display = 'block';
+      cap.textContent = '🛈 Speak & Compare is currently unavailable for this language in this browser. Listening practice still works great.';
+      document.getElementById('startRec').disabled = true;
+    } else {
+      cap.style.display = 'none';
+      document.getElementById('startRec').disabled = false;
+    }
+
+    // langCapability box on Phrase Loop page
+    const lc = document.getElementById('langCapability');
+    lc.style.display = 'block';
+    lc.innerHTML =
+      (cfg.tier === 'full')
+        ? '🗣️🎧 <strong>Full mode</strong>: Speak & Compare + Phrase Loop.'
+        : '🎧 <strong>Listen-only mode</strong>: Phrase Loop available. Speak & Compare is disabled for this language.';
+  }
+
+  function updateSpeakTabVisibility(cfg){
+    const btn = document.getElementById('tabSpeak');
+    if (!btn) return;
+
+    if (cfg.tier === 'partial') {
+      // If Speak tab is active and we switch to a partial language,
+      // shove user back to Phrase Loop instead, then hide tab.
+      if (btn.classList.contains('active')) {
+        document.querySelector('[data-tab="loop"]').click();
+      }
+      btn.style.display = 'none';
+    } else {
+      btn.style.display = '';
+    }
+  }
+
+
+
+  // [S9] TAB SWITCHING
+  // ------------------------------------------------------------
+  // We treat each <section.panel> as a "page".
+  // The tab buttons (.tab) have data-tab="loop"/"speak"/"packs"/"stats".
+  //
+  // Clicking a tab:
+  //   - removes .active class from every tab and panel
+  //   - adds .active to the clicked tab and matching panel
+  // ------------------------------------------------------------
+  document.querySelectorAll('.tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+
+      btn.classList.add('active');
+      document.getElementById(btn.dataset.tab).classList.add('active');
+    });
+  });
+
+
+ // [S10] STATS TRACKING
+// ------------------------------------------------------------
+// matchHistory:
+//   Pulled from localStorage. In the future this could store your
+//   pronunciation match scores from Speak & Compare.
+//
+// updateStatsUI():
+//   - Reads local "stats" from storage:
+//       stats.sessions   (# times you started a loop)
+//       stats.utterances (# phrases spoken by the loop)
+//   - Calculates average pronunciation match from matchHistory
+//
+//   IMPORTANT CHANGE FOR TEST MODE:
+//   The Stats <section> is currently commented out in the HTML,
+//   so elements like #stSessions, #stUtterances, #stAvg might NOT
+//   exist. We now guard against that so we don't crash.
+//
+// incUtterance():
+//   - increments stats.utterances when TTS finishes a phrase
+//
+// startSession():
+//   - increments stats.sessions every time you start a new loop
+//
+// NOTE: We keep the original "un-guarded" updateStatsUI() version
+//       below in a comment so you can restore it easily later.
+// ------------------------------------------------------------
+let matchHistory = store.get('matchHistory', []);
+
+// SAFE VERSION (used now)
+function updateStatsUI(){
+  const stats = store.get('stats', {});
+
+  const sesEl = document.getElementById('stSessions');
+  const uttEl = document.getElementById('stUtterances');
+  const avgEl = document.getElementById('stAvg');
+
+  // If the Stats panel is commented out, these will all be null.
+  // In that case, quietly skip updates so we don't throw an error.
+  if (!sesEl || !uttEl || !avgEl) {
+    return;
+  }
+
+  // Populate numbers if Stats UI is present
+  sesEl.textContent = stats.sessions || 0;
+  uttEl.textContent = stats.utterances || 0;
+
+  const avg = matchHistory.length
+    ? (matchHistory.reduce((a,c)=>a+c,0) / matchHistory.length)
+    : 0;
+
+  avgEl.textContent = matchHistory.length
+    ? `${avg.toFixed(0)}%`
+    : '—';
+}
+
+/*
+ // ORIGINAL VERSION (before Stats panel was commented out):
+ function updateStatsUI(){
+   const stats = store.get('stats', {});
+   document.getElementById('stSessions').textContent = stats.sessions || 0;
+   document.getElementById('stUtterances').textContent = stats.utterances || 0;
+
+   const avg = matchHistory.length
+     ? (matchHistory.reduce((a,c)=>a+c,0)/matchHistory.length)
+     : 0;
+
+   document.getElementById('stAvg').textContent =
+     matchHistory.length ? `${avg.toFixed(0)}%` : '—';
+ }
+*/
+
+function incUtterance(){
+  const stats = store.get('stats', {});
+  stats.utterances = (stats.utterances || 0) + 1;
+  store.set('stats', stats);
+  updateStatsUI();
+}
+
+function startSession(){
+  const stats = store.get('stats', {});
+  stats.sessions = (stats.sessions || 0) + 1;
+  store.set('stats', stats);
+  updateStatsUI();
+}
+
+
+
+// [S11] LANGUAGE INIT + CHANGE HANDLER
+// ------------------------------------------------------------
+// OLD BEHAVIOR (what we are replacing):
+//   - We always defaulted to English ('en') if there was no saved language,
+//     and we immediately called setLanguage(initial).
+//
+// NEW BEHAVIOR (first-launch friendly):
+//   - We will NOT assume English.
+//   - On first launch, no language is auto-selected and we do not
+//     auto-run setLanguage(). The <select> will show the placeholder
+//     "— Select a language —" from [S1].
+//   - Once the user picks a language from the dropdown, we:
+//        * theme the app
+//        * load voices
+//        * render packs
+//        * show Speak & Compare availability
+//        * save that language in localStorage
+//   - After that, on future loads, we auto-apply that saved language.
+//
+// HOW IT WORKS:
+//
+// 1. VALID_LANG_CODES: list of allowed language codes.
+// 2. initialLang: read previously saved language from localStorage
+//    via store.get('lang', null). If it's not valid, treat as first launch.
+// 3. We set up langSelect.addEventListener('change', ...) so that when
+//    the user chooses a language for the first time (or changes it later),
+//    we call setLanguage().
+// 4. If we DO have an initialLang (returning user), we immediately:
+//       langSelect.value = initialLang
+//       setLanguage(initialLang)
+//    else (brand-new user):
+//       langSelect.value = ""   <-- selects the disabled placeholder from [S1]
+//       and we DO NOT call setLanguage() yet.
+// ------------------------------------------------------------
+
+// 1. Build a list of valid codes from LANGS (so we don't rely on hardcoding)
+const VALID_LANG_CODES = LANGS.map(l => l.code);
+
+// 2. Grab the last-used language from localStorage.
+//    IMPORTANT CHANGE: default is now null (not 'en').
+let initialLang = store.get('lang', null);
+
+// 3. If what's in storage isn't valid, treat this like first launch.
+if (!VALID_LANG_CODES.includes(initialLang)) {
+  initialLang = null;
+}
+
+// 4. Attach the dropdown change handler.
+//    Whenever the user chooses a real language (not the placeholder),
+//    we fully activate that language.
+langSelect.addEventListener('change', e => {
+  const chosenCode = e.target.value;
+
+  // Safety check: if somehow the value isn't one of our known languages
+  // (like the placeholder ""), then we ignore it.
+  if (!VALID_LANG_CODES.includes(chosenCode)) return;
+
+  // This sets theme/fonts, voices, packs, capability UI, saved loops, etc.
+  // AND it saves the language code in localStorage (store.set('lang', code)).
+  setLanguage(chosenCode);
+
+  // After setLanguage() runs, from now on this device has a "last language"
+  // so on reload we'll go into the returning-user path below.
+});
+
+
+// setLanguage(code)
+// ------------------------------------------------------------
+// PURPOSE:
+//   - Persist the chosen language for next time
+//   - Apply theming / direction / font
+//   - Render phrase packs for that language
+//   - Load voices for TTS
+//   - Update Speak & Compare capability notices
+//   - Hide/show Speak tab if language is listen-only
+//   - Update the Saved Loops panel (Starter Packs + My Saved Loops)
+//
+// NOTE: We call this either when the user picks a language in the dropdown,
+//       OR immediately on load if we already have a saved language.
+// ------------------------------------------------------------
+function setLanguage(code){
+  // Save choice for future sessions
+  store.set('lang', code);
+
+  // Look up the config for this language
+  const cfg = cfgFor(code);
+
+  // Apply theme (accent colors, font stack, rtl/ltr, etc.)
+  applyTheme(cfg);
+
+  // ------------------------------------------------------------
+  // FUTURE ENHANCEMENT: RTL SUPPORT
+  // ------------------------------------------------------------
+  // If you reintroduce Arabic 🇸🇦 or Persian 🇮🇷 later:
+  //  1. Make sure they have `dir:'rtl'` in the LANGS array.
+  //  2. Add this line below (uncommented) so the entire page flips:
+  //
+  //     document.documentElement.setAttribute('dir', cfg.dir || 'ltr');
+  //
+  //  3. Add CSS in <style>:
+  //        html[dir="rtl"] { direction: rtl; text-align: right; }
+  //        html[dir="rtl"] input, textarea, select, button {
+  //            direction: rtl; text-align: right;
+  //        }
+  //
+  // This will make the UI render naturally for right-to-left languages.
+  // ------------------------------------------------------------
+
+
+  // Fill the Phrase Packs tab with this language's packs
+  renderPacks(code);
+
+  // Load voices for this language (TTS)
+  loadVoicesWithRetry(code, 0);
+
+  // Update Speak & Compare notices (availability, warnings)
+  updateCapabilityNotices(cfg);
+
+  // Hide or show the Speak & Compare tab depending on tier
+  updateSpeakTabVisibility(cfg);
+
+  // 🔄 NEW:
+  // Update the Saved Loops panel in the Phrase Loop card.
+  // This fills #savedLoopsBox with:
+  //   - Starter Packs for this language
+  //   - User's saved loops
+  renderSavedLoops();
+}
+
+
+// ====== INITIAL APP BOOT SEQUENCE ======
+// ------------------------------------------------------------
+// CASE A: Returning user
+//   - We HAVE a previously saved language in localStorage
+//     (initialLang is not null)
+//   - Behavior:
+//        * Pre-select that language in the dropdown
+//        * Immediately call setLanguage(initialLang)
+//        * App is "live" right away
+//
+// CASE B: First-time user
+//   - We DO NOT have a saved language yet
+//     (initialLang is null)
+//   - Behavior:
+//        * Leave dropdown showing the placeholder option
+//          "— Select a language —" (value == "")
+//        * DO NOT call setLanguage() yet
+//        * Just show a helper message in savedLoopsBox
+//
+// After that, we still refresh Saved Sets / Favorites / Stats
+// so those panels aren't empty-looking.
+// ------------------------------------------------------------
+if (initialLang) {
+  // Returning user path:
+  // Put their saved language in the dropdown...
+  langSelect.value = initialLang;
+
+  // ...and fully initialize the app in that language.
+  // setLanguage() will also call renderSavedLoops().
+  setLanguage(initialLang);
+} else {
+  // First-time user path:
+  // Show the disabled placeholder option from S1
+  // (the one that says "— Select a language —").
+  langSelect.value = "";
+
+  // We intentionally do NOT call setLanguage() yet here.
+  // The app will sit "uninitialized" until the user picks a language.
+
+  // But we DO want the Saved Loops panel to show a friendly message
+  // ("Select a language above to view starter packs and your saved loops.")
+  // renderSavedLoops() handles that null-language case.
+  renderSavedLoops();
+}
+
+// After initial setup (whichever path we took), refresh other local UI:
+//  - Saved Sets dropdown on the Phrase Loop page
+//  - Favorites list on the Phrase Packs page
+//  - Stats numbers on the Stats page
+
+refreshSavedSets();
+// refreshFavoritesUI(); // Favorites panel currently disabled
+updateStatsUI();
+
+
+// NOTE:
+// - In the returning-user path above, setLanguage(initialLang) already
+//   ran renderSavedLoops() for us.
+// - In the first-time path, we manually called renderSavedLoops().
+//   So by here, #savedLoopsBox should already have something meaningful
+//   in both cases.
+
+/* FUTURE: Enable RTL language support here when Arabic/Farsi are re-added */
+
+
+
+
+  </script>
+</body>
+</html>
