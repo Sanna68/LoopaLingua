@@ -1,7 +1,7 @@
 {
-  "name": "Loopalingua",
-  "short_name": "Loopalingua",
-  "description": "Multilingual phrase looper for Spanish, Chinese, and Farsi with TTS, shuffle, and favorites.",
+  "name": "LoopaLingua",
+  "short_name": "LoopaLingua",
+  "description": "Multilingual phrase looper for 10 different languages, including English, Spanish, French, and Chinese with TTS, shuffle, and favorites.",
   "start_url": ".",
   "display": "standalone",
   "background_color": "#0e1114",
