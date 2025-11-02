@@ -103,9 +103,20 @@ body {
 
     .brand { display:flex; align-items:center; gap:10px; }
 
-    /* Little "flag" block icon next to app title */
-    .flag { width: 34px; height: 22px; border-radius: 4px; overflow:hidden; box-shadow:0 2px 8px rgba(0,0,0,.3); }
-    .flag > div { height: 33.33%; } .flag .r { background:#B22234; } .flag .y { background:#fff; }
+   /* LoopaLingua icon next to app title */
+.flag {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0,0,0,.3);
+  background: url('loopalingua-icon-512.png') center / cover no-repeat;
+}
+
+/* Hide the old flag color divs */
+.flag > div { display: none; }
+
+
 
     h1 { margin:0; font-size:1.12rem; letter-spacing:0.3px; }
 
